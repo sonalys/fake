@@ -10,7 +10,7 @@ Automatically create type-safe mocks for any public interface.
 
 Make sure `$GO_PATH/bin` is in your `$PATH`
 
-`go install github.com/sonalys/fake/entrypoints/cli@latest`
+`go install github.com/sonalys/fake/entrypoints/fake@latest`
 
 ### Release download
 
