@@ -75,7 +75,7 @@ So you can use it like this
 ```go
 
 func Test_Stub(t *testing.T) {
-  mock := mocks.NewStubInterface(t)
+  mock := mocks.NewStubInterface(t) // Setup call expectations
   mock.OnWeirdFunc1(func(a any, b interface { A() int }) {
     require.NotNil(t, a)
     ...
