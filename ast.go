@@ -1,0 +1,96 @@
+package fake
+
+import (
+	"fmt"
+	"go/ast"
+	"strings"
+)
+
+func (f *ParsedInterface) printAstExpr(expr ast.Expr) string {
+	file := f.ParsedFile
+	gen := file.Generator
+	// Extract package and type name
+	switch fieldType := expr.(type) {
+	case *ast.Ident:
+		if strings.ToLower(fieldType.Name) == fieldType.Name {
+			return fieldType.Name
+		}
+		// If we have an object, that means we need to translate the type from mock package to current package.
+		file.Imports[file.PkgName] = &PackageInfo{
+			Name:       file.PkgName,
+			ImportPath: file.PkgPath,
+		}
+		file.UsedImports[file.PkgName] = struct{}{}
+		return fmt.Sprintf("%s.%s", file.PkgName, fieldType.Name)
+	case *ast.SelectorExpr:
+		// Type from another package
+		return fmt.Sprintf("%s.%s", fieldType.X, fieldType.Sel)
+	case *ast.StarExpr:
+		return fmt.Sprintf("*%s", f.printAstExpr(fieldType.X))
+	case *ast.ArrayType:
+		return fmt.Sprintf("[]%s", f.printAstExpr(fieldType.Elt))
+	case *ast.Ellipsis:
+		return fmt.Sprintf("...%s", f.printAstExpr(fieldType.Elt))
+	case *ast.ChanType:
+		switch fieldType.Dir {
+		case ast.RECV:
+			return fmt.Sprintf("<-chan %s", f.printAstExpr(fieldType.Value))
+		case ast.SEND:
+			return fmt.Sprintf("chan<-%s", f.printAstExpr(fieldType.Value))
+		case ast.SEND | ast.RECV:
+			return fmt.Sprintf("chan %s", f.printAstExpr(fieldType.Value))
+		}
+	case *ast.MapType:
+		return fmt.Sprintf("map[%s]%s", f.printAstExpr(fieldType.Key), f.printAstExpr(fieldType.Value))
+	case *ast.FuncType:
+		b := &strings.Builder{}
+		f.PrintMethodHeader(b, "func", &ParsedField{
+			Interface: f,
+			Ref: &ast.Field{
+				Type: expr,
+			},
+			Name: "func",
+		})
+		return b.String()
+	case *ast.InterfaceType:
+		if fieldType.Methods.NumFields() == 0 {
+			return "interface{}"
+		}
+		methods := gen.ListInterfaceFields(&ParsedInterface{
+			Ref: fieldType,
+		}, file.Imports)
+		b := &strings.Builder{}
+		for _, method := range methods {
+			methodName := method.Ref.Names[0].Name
+			b.WriteString("\t")
+			f.PrintMethodHeader(b, methodName, &ParsedField{
+				Interface: f,
+				Ref: &ast.Field{
+					Type: method.Ref.Type.(*ast.FuncType),
+				},
+				Name: methodName,
+			})
+			b.WriteString("\n")
+		}
+		return fmt.Sprintf("interface{\n%s\n}", b.String())
+	}
+	return ""
+}
+
+func getAstTypeName(expr ast.Expr) string {
+	switch fieldType := expr.(type) {
+	case *ast.Ident:
+		return fieldType.Name
+	case *ast.SelectorExpr:
+		return fmt.Sprintf("%s", fieldType.X)
+	case *ast.StarExpr:
+		return getAstTypeName(fieldType.X)
+	case *ast.ArrayType:
+		return getAstTypeName(fieldType.Elt)
+	case *ast.Ellipsis:
+		return getAstTypeName(fieldType.Elt)
+	case *ast.ChanType:
+		return getAstTypeName(fieldType.Value)
+	}
+	return ""
+}
