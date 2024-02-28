@@ -3,10 +3,10 @@ package stub
 import "time"
 
 type StubInterface[T comparable] interface {
-	Interf(a any, b interface {
+	WeirdFunc1(a any, b interface {
 		A() int
 	})
-	KillYourself(in *<-chan time.Time, outs ...chan int) error
+	WeirdFunc2(in *<-chan time.Time, outs ...chan int) error
 	Empty()
-	Weird(map[T]func(in ...*chan<- time.Time)) T
+	WeirdFunc3(map[T]func(in ...*chan<- time.Time)) T
 }
