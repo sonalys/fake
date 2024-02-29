@@ -20,7 +20,7 @@ Visit the [Release Page](https://github.com/sonalys/fake/releases) and download 
 
 You can safely run fake from a docker container using
 
-`docker run --rm ghcr.io/sonalys/fake:latest fake -input PATH -output mocks -ignore tests`
+`docker run --rm -u $(id -u):$(id -g) -v .:/code ghcr.io/sonalys/fake:latest /fake -input /code -output /code/mocks`
 
 ## Usage
 
@@ -35,6 +35,7 @@ The flags are:
   -input    STRING    Folder to scan for interfaces, can be invoked multiple times
   -output   STRING    Output folder, it will follow a tree structure repeating the package path
   -ignore   STRING    Folder to ignore, can be invoked multiple times
+  
 ```
 
 
@@ -57,16 +58,16 @@ Will generate the following mock:
 
 ```go
 type StubInterface[T comparable] struct {
-	setupWeirdFunc1 mock[func(a any, b interface {
+	setupWeirdFunc1 mockSetup.Mock[func(a any, b interface {
 		A() int
 	})]
-	setupWeirdFunc2 mock[func(in *<-chan time.Time, outs ...chan int) error]
-	setupEmpty      mock[func()]
-	setupWeirdFunc3 mock[func(a0 map[stub.T]func(in ...*chan<- time.Time)) stub.T]
+	setupWeirdFunc2 mockSetup.Mock[func(in *<-chan time.Time, outs ...chan int) error]
+	setupEmpty      mockSetup.Mock[func()]
+	setupWeirdFunc3 mockSetup.Mock[func(a0 map[T]func(in ...*chan<- time.Time)) T]
 }
 
-func (s *StubInterface) OnWeirdFunc1(funcs ...func(a any, b interface { A() int })) Config
-func (s *StubInterface) WeirdFunc1(a any, b interface { A() int })
+func (s *StubInterface[T]) OnWeirdFunc1(funcs ...func(a any, b interface { A() int })) Config
+func (s *StubInterface[T]) WeirdFunc1(a any, b interface { A() int })
 ...
 ```
 
@@ -75,14 +76,12 @@ So you can use it like this
 ```go
 
 func Test_Stub(t *testing.T) {
-  mock := mocks.NewStubInterface(t) // Setup call expectations
+  mock := mocks.NewStubInterface[int](t) // Setup call expectations
   mock.OnWeirdFunc1(func(a any, b interface { A() int }) {
     require.NotNil(t, a)
     ...
   })
-
-  var Stub StubInterface[any] = mock
-
+  var Stub StubInterface[int] = mock
   Stub.WeirdFunc1(1, nil) // Will call the previous function.
 }
 ```
@@ -94,4 +93,9 @@ mock.OnWeirdFunc1(func(a any, b interface { A() int }) {
   require.NotNil(t, a)
   ...
 }).Repeat(2)
+// or
+mock.OnWeirdFunc1(func(a any, b interface { A() int }) {
+  require.NotNil(t, a)
+  ...
+}).Maybe()
 ```
