@@ -11,13 +11,18 @@ import (
 )
 
 type ParsedInterface struct {
-	ParsedFile             *ParsedFile
-	Type                   *ast.TypeSpec
-	Ref                    *ast.InterfaceType
-	Name                   string
-	GenericsHeader         string
-	GenericsNamelessHeader string
-	GenericsName           []string
+	ParsedFile    *ParsedFile
+	Type          *ast.TypeSpec
+	Ref           *ast.InterfaceType
+	Name          string
+	GenericsTypes []string
+	GenericsNames []string
+	// TranslateGenericNames translates generic type names from any imported interfaces.
+	// Example:
+	//	type A[T any] interface{ B[T] }
+	//	type B[J any] interface{ Method() J }
+	// it should have method Method() T when implementing A mock.
+	TranslateGenericNames []string
 }
 
 func (i *ParsedInterface) ListFields() []*ParsedField {
@@ -29,39 +34,66 @@ func (g *Generator) ListInterfaceFields(i *ParsedInterface, imports map[string]*
 		return nil
 	}
 	var resp []*ParsedField
-	for _, method := range i.Ref.Methods.List {
-		switch t := method.Type.(type) {
+	for _, field := range i.Ref.Methods.List {
+		switch t := field.Type.(type) {
 		case *ast.FuncType:
 			resp = append(resp, &ParsedField{
 				Interface: i,
-				Ref:       method,
-				Name:      method.Names[0].Name,
+				Ref:       field,
+				Name:      field.Names[0].Name,
 			})
 		case *ast.SelectorExpr:
+			// Interface from another package.
 			resp = append(resp, g.ListInterfaceFields(g.ParseInterface(t, i.ParsedFile.UsedImports, i.ParsedFile.Imports), imports)...)
+		case *ast.IndexExpr:
+			// Interface from same package.
+			// Child interface has only 1 generic parameter.
+			ident := t.X.(*ast.Ident)
+			newInterface, _ := i.ParsedFile.FindInterfaceByName(ident.Name)
+			index, ok := t.Index.(*ast.Ident)
+			if !ok {
+				log.Fatal().Msgf("unexpected type of *ast.FuncType: expected *ast.Ident, got %T", t.Index)
+			}
+			newInterface.TranslateGenericNames = []string{index.Name}
+			newInterface.GenericsNames[0] = i.printAstExpr(index)
+			// IndexExpr means 1 parameter, so newInterface only has 1 type and 1 name.
+			newInterface.Type.TypeParams.List[0].Names[0].Name = index.Name
+			resp = append(resp, g.ListInterfaceFields(newInterface, imports)...)
+		case *ast.IndexListExpr:
+			// Interface from same package.
+			// Child interface has many generic parameter.
+			ident := t.X.(*ast.Ident)
+			newInterface, _ := i.ParsedFile.FindInterfaceByName(ident.Name)
+			fields := g.ListInterfaceFields(newInterface, imports)
+			var names []string
+			for _, index := range t.Indices {
+				names = append(names, i.printAstExpr(index))
+			}
+			newInterface.TranslateGenericNames = names
+			resp = append(resp, fields...)
 		}
 	}
 	return resp
 }
 
-func (f *ParsedInterface) getTypeGenerics(t *ast.TypeSpec) (string, []string) {
-	var genericsHeader string
+func (f *ParsedInterface) getTypeGenerics(t *ast.TypeSpec) ([]string, []string) {
+	var genericsTypes []string
 	var genericsNames []string
 	if t.TypeParams != nil {
-		types := []string{}
 		for _, t := range t.TypeParams.List {
-			types = append(types, fmt.Sprintf("%s %s", t.Names[0].Name, f.printAstExpr(t.Type)))
-			genericsNames = append(genericsNames, t.Names[0].Name)
+			for _, name := range t.Names {
+				genericsTypes = append(genericsTypes, f.printAstExpr(t.Type))
+				genericsNames = append(genericsNames, name.Name)
+			}
 		}
-		genericsHeader = fmt.Sprintf("[%s]", strings.Join(types, ","))
 	}
-	return genericsHeader, genericsNames
+	return genericsTypes, genericsNames
 }
 
-func findInterfaceByName(file *ParsedFile, name string) (*ParsedInterface, map[string]*PackageInfo) {
-	for _, i := range file.ListInterfaces() {
+func (f *ParsedFile) FindInterfaceByName(name string) (*ParsedInterface, map[string]*PackageInfo) {
+	for _, i := range f.ListInterfaces() {
 		if i.Name == name {
-			return i, file.Imports
+			return i, f.Imports
 		}
 	}
 	return nil, nil
@@ -86,7 +118,7 @@ func (g *Generator) ParseInterface(ident *ast.SelectorExpr, usedImports map[stri
 	pkg := pkgs[0]
 	for _, file := range pkg.GoFiles {
 		parsed := g.ParseFile(file)
-		i, importsInfo := findInterfaceByName(parsed, pkgType)
+		i, importsInfo := parsed.FindInterfaceByName(pkgType)
 		if i == nil {
 			continue
 		}
@@ -100,13 +132,31 @@ func (g *Generator) ParseInterface(ident *ast.SelectorExpr, usedImports map[stri
 	return nil
 }
 
-func (i *ParsedInterface) GetGenericsInfo() (string, []string) {
+func (i *ParsedInterface) GetGenericsInfo() ([]string, []string) {
 	return i.getTypeGenerics(i.Type)
+}
+
+func (i *ParsedInterface) WriteGenericsHeader() string {
+	if len(i.GenericsTypes) == 0 {
+		return ""
+	}
+	var merge []string
+	for idx := range i.GenericsTypes {
+		merge = append(merge, fmt.Sprintf("%s %s", i.GenericsNames[idx], i.GenericsTypes[idx]))
+	}
+	return fmt.Sprintf("[%s]", strings.Join(merge, ", "))
+}
+
+func (i *ParsedInterface) WriteGenericsNameHeader() string {
+	if len(i.GenericsTypes) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("[%s]", strings.Join(i.GenericsNames, ", "))
 }
 
 func (i *ParsedInterface) WriteStruct(w io.Writer) {
 	// Write struct definition implementing the interface
-	fmt.Fprintf(w, "type %s%s struct {\n", i.Name, i.GenericsHeader)
+	fmt.Fprintf(w, "type %s%s struct {\n", i.Name, i.WriteGenericsHeader())
 	for _, field := range i.ListFields() {
 		fmt.Fprintf(w, "\tsetup%s mockSetup.Mock[", field.Name)
 		i.PrintMethodHeader(w, "func", field)
@@ -116,8 +166,9 @@ func (i *ParsedInterface) WriteStruct(w io.Writer) {
 }
 
 func (i *ParsedInterface) WriteInitializer(w io.Writer) {
-	fmt.Fprintf(w, "func New%s%s(t *testing.T) *%s%s {\n", i.Name, i.GenericsHeader, i.Name, i.GenericsNamelessHeader)
-	fmt.Fprintf(w, "\treturn &%s%s{\n", i.Name, i.GenericsNamelessHeader)
+	genericsNameHeader := i.WriteGenericsNameHeader()
+	fmt.Fprintf(w, "func New%s%s(t *testing.T) *%s%s {\n", i.Name, i.WriteGenericsHeader(), i.Name, genericsNameHeader)
+	fmt.Fprintf(w, "\treturn &%s%s{\n", i.Name, genericsNameHeader)
 	for _, field := range i.ListFields() {
 		fmt.Fprintf(w, "\t\tsetup%s: mockSetup.NewMock[", field.Name)
 		i.PrintMethodHeader(w, "func", field)
@@ -128,7 +179,8 @@ func (i *ParsedInterface) WriteInitializer(w io.Writer) {
 }
 
 func (i *ParsedInterface) WriteAssertExpectations(w io.Writer) {
-	fmt.Fprintf(w, "func (s *%s%s) AssertExpectations(t *testing.T) bool {\n", i.Name, i.GenericsNamelessHeader)
+	genericsTypeHeader := i.WriteGenericsNameHeader()
+	fmt.Fprintf(w, "func (s *%s%s) AssertExpectations(t *testing.T) bool {\n", i.Name, genericsTypeHeader)
 	fmt.Fprintf(w, "\treturn ")
 	for _, field := range i.ListFields() {
 		fmt.Fprintf(w, "s.setup%s.AssertExpectations(t) &&\n\t\t", field.Name)
@@ -138,7 +190,7 @@ func (i *ParsedInterface) WriteAssertExpectations(w io.Writer) {
 }
 
 func (i *ParsedInterface) WriteOnMethod(w io.Writer, methodName string, f *ParsedField) {
-	fmt.Fprintf(w, "func (s *%s%s) On%s(funcs ...", i.Name, i.GenericsNamelessHeader, methodName)
+	fmt.Fprintf(w, "func (s *%s%s) On%s(funcs ...", i.Name, i.WriteGenericsNameHeader(), methodName)
 	i.PrintMethodHeader(w, "func", f)
 	fmt.Fprintf(w, ") mockSetup.Config {\n")
 	fmt.Fprintf(w, "\treturn s.setup%s.Append(funcs...)\n", methodName)
@@ -146,7 +198,7 @@ func (i *ParsedInterface) WriteOnMethod(w io.Writer, methodName string, f *Parse
 }
 
 func (i *ParsedInterface) WriteMethod(w io.Writer, methodName string, f *ParsedField) {
-	fmt.Fprintf(w, "func (s *%s%s) ", i.Name, i.GenericsNamelessHeader)
+	fmt.Fprintf(w, "func (s *%s%s) ", i.Name, i.WriteGenericsNameHeader())
 	i.PrintMethodHeader(w, methodName, f)
 	fmt.Fprintf(w, "{\n")
 	var callingNames []string

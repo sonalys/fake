@@ -12,14 +12,17 @@ func (f *ParsedInterface) printAstExpr(expr ast.Expr) string {
 	// Extract package and type name
 	switch fieldType := expr.(type) {
 	case *ast.Ident:
-		// If it's a generic type, we don't need to print package name with it.
-		for _, name := range f.GenericsName {
-			if name == fieldType.Name {
-				return fieldType.Name
-			}
-		}
 		if strings.ToLower(fieldType.Name[:1]) == fieldType.Name[:1] {
 			return fieldType.Name
+		}
+		// If it's a generic type, we don't need to print package name with it.
+		for idx, name := range f.GenericsNames {
+			if name == fieldType.Name {
+				if len(f.TranslateGenericNames) > 0 {
+					return f.TranslateGenericNames[idx]
+				}
+				return fieldType.Name
+			}
 		}
 		// If we have an object, that means we need to translate the type from mock package to current package.
 		file.Imports[file.PkgName] = &PackageInfo{

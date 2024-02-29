@@ -10,7 +10,8 @@ import (
 )
 
 type StubInterface[T comparable] struct {
-	setupWeirdFunc1 mockSetup.Mock[func(a any, b interface {
+	setupDifferentGenericName mockSetup.Mock[func(a T) time.Time]
+	setupWeirdFunc1           mockSetup.Mock[func(a any, b interface {
 		A() int
 	})]
 	setupWeirdFunc2 mockSetup.Mock[func(in *<-chan time.Time, outs ...chan int) error]
@@ -20,6 +21,7 @@ type StubInterface[T comparable] struct {
 
 func NewStubInterface[T comparable](t *testing.T) *StubInterface[T] {
 	return &StubInterface[T]{
+		setupDifferentGenericName: mockSetup.NewMock[func(a T) time.Time](t),
 		setupWeirdFunc1: mockSetup.NewMock[func(a any, b interface {
 			A() int
 		})](t),
@@ -30,11 +32,24 @@ func NewStubInterface[T comparable](t *testing.T) *StubInterface[T] {
 }
 
 func (s *StubInterface[T]) AssertExpectations(t *testing.T) bool {
-	return s.setupWeirdFunc1.AssertExpectations(t) &&
+	return s.setupDifferentGenericName.AssertExpectations(t) &&
+		s.setupWeirdFunc1.AssertExpectations(t) &&
 		s.setupWeirdFunc2.AssertExpectations(t) &&
 		s.setupEmpty.AssertExpectations(t) &&
 		s.setupWeirdFunc3.AssertExpectations(t) &&
 		true
+}
+
+func (s *StubInterface[T]) OnDifferentGenericName(funcs ...func(a T) time.Time) mockSetup.Config {
+	return s.setupDifferentGenericName.Append(funcs...)
+}
+
+func (s *StubInterface[T]) DifferentGenericName(a T) time.Time {
+	f, ok := s.setupDifferentGenericName.Call()
+	if !ok {
+		panic(fmt.Sprintf("unexpected call DifferentGenericName(%v)", a))
+	}
+	return (*f)(a)
 }
 
 func (s *StubInterface[T]) OnWeirdFunc1(funcs ...func(a any, b interface {
@@ -87,4 +102,31 @@ func (s *StubInterface[T]) WeirdFunc3(a0 map[T]func(in ...*chan<- time.Time)) T 
 		panic(fmt.Sprintf("unexpected call WeirdFunc3(%v)", a0))
 	}
 	return (*f)(a0)
+}
+
+type AnotherInterface[J any, A any] struct {
+	setupDifferentGenericName mockSetup.Mock[func(a J) A]
+}
+
+func NewAnotherInterface[J any, A any](t *testing.T) *AnotherInterface[J, A] {
+	return &AnotherInterface[J, A]{
+		setupDifferentGenericName: mockSetup.NewMock[func(a J) A](t),
+	}
+}
+
+func (s *AnotherInterface[J, A]) AssertExpectations(t *testing.T) bool {
+	return s.setupDifferentGenericName.AssertExpectations(t) &&
+		true
+}
+
+func (s *AnotherInterface[J, A]) OnDifferentGenericName(funcs ...func(a J) A) mockSetup.Config {
+	return s.setupDifferentGenericName.Append(funcs...)
+}
+
+func (s *AnotherInterface[J, A]) DifferentGenericName(a J) A {
+	f, ok := s.setupDifferentGenericName.Call()
+	if !ok {
+		panic(fmt.Sprintf("unexpected call DifferentGenericName(%v)", a))
+	}
+	return (*f)(a)
 }

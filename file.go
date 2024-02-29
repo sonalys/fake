@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 type ParsedFile struct {
@@ -59,10 +58,7 @@ func (f *ParsedFile) ListInterfaces() []*ParsedInterface {
 				Ref:        interfaceType,
 				Name:       typeSpec.Name.Name,
 			}
-			cur.GenericsHeader, cur.GenericsName = cur.GetGenericsInfo()
-			if len(cur.GenericsName) > 0 {
-				cur.GenericsNamelessHeader = fmt.Sprintf("[%s]", strings.Join(cur.GenericsName, ","))
-			}
+			cur.GenericsTypes, cur.GenericsNames = cur.GetGenericsInfo()
 			resp = append(resp, cur)
 		}
 	}

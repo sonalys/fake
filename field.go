@@ -11,6 +11,7 @@ type ParsedField struct {
 	Interface *ParsedInterface
 	Ref       *ast.Field
 	Name      string
+	Type      string
 }
 
 func (f *ParsedField) digestMethodImports(funcType *ast.FuncType) {
