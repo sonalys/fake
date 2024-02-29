@@ -12,7 +12,13 @@ func (f *ParsedInterface) printAstExpr(expr ast.Expr) string {
 	// Extract package and type name
 	switch fieldType := expr.(type) {
 	case *ast.Ident:
-		if strings.ToLower(fieldType.Name) == fieldType.Name {
+		// If it's a generic type, we don't need to print package name with it.
+		for _, name := range f.GenericsName {
+			if name == fieldType.Name {
+				return fieldType.Name
+			}
+		}
+		if strings.ToLower(fieldType.Name[:1]) == fieldType.Name[:1] {
 			return fieldType.Name
 		}
 		// If we have an object, that means we need to translate the type from mock package to current package.
@@ -62,7 +68,7 @@ func (f *ParsedInterface) printAstExpr(expr ast.Expr) string {
 		b := &strings.Builder{}
 		for _, method := range methods {
 			methodName := method.Ref.Names[0].Name
-			b.WriteString("\t")
+			b.WriteString("\t\t")
 			f.PrintMethodHeader(b, methodName, &ParsedField{
 				Interface: f,
 				Ref: &ast.Field{
@@ -70,7 +76,6 @@ func (f *ParsedInterface) printAstExpr(expr ast.Expr) string {
 				},
 				Name: methodName,
 			})
-			b.WriteString("\n")
 		}
 		return fmt.Sprintf("interface{\n%s\n}", b.String())
 	}

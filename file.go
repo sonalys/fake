@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type ParsedFile struct {
@@ -59,6 +60,9 @@ func (f *ParsedFile) ListInterfaces() []*ParsedInterface {
 				Name:       typeSpec.Name.Name,
 			}
 			cur.GenericsHeader, cur.GenericsName = cur.GetGenericsInfo()
+			if len(cur.GenericsName) > 0 {
+				cur.GenericsNamelessHeader = fmt.Sprintf("[%s]", strings.Join(cur.GenericsName, ","))
+			}
 			resp = append(resp, cur)
 		}
 	}
@@ -70,7 +74,7 @@ func (f *ParsedFile) WriteImports(w io.Writer) {
 	fmt.Fprintf(w, "import (\n")
 	fmt.Fprintf(w, "\t\"fmt\"\n")
 	fmt.Fprintf(w, "\t\"testing\"\n")
-	fmt.Fprintf(w, "\t_ \"github.com/sonalys/fake/boilerplate\"\n")
+	fmt.Fprintf(w, "\tmockSetup \"github.com/sonalys/fake/boilerplate\"\n")
 	for name := range f.UsedImports {
 		info, ok := f.Imports[name]
 		if !ok {

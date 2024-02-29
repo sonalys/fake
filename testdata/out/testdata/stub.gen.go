@@ -4,33 +4,32 @@ package mocks
 
 import (
 	"fmt"
-	_ "github.com/sonalys/fake/boilerplate"
-	"github.com/sonalys/fake/testdata"
+	mockSetup "github.com/sonalys/fake/boilerplate"
 	"testing"
 	"time"
 )
 
 type StubInterface[T comparable] struct {
-	setupWeirdFunc1 mock[func(a any, b interface {
+	setupWeirdFunc1 mockSetup.Mock[func(a any, b interface {
 		A() int
 	})]
-	setupWeirdFunc2 mock[func(in *<-chan time.Time, outs ...chan int) error]
-	setupEmpty      mock[func()]
-	setupWeirdFunc3 mock[func(a0 map[stub.T]func(in ...*chan<- time.Time)) stub.T]
+	setupWeirdFunc2 mockSetup.Mock[func(in *<-chan time.Time, outs ...chan int) error]
+	setupEmpty      mockSetup.Mock[func()]
+	setupWeirdFunc3 mockSetup.Mock[func(a0 map[T]func(in ...*chan<- time.Time)) T]
 }
 
 func NewStubInterface[T comparable](t *testing.T) *StubInterface[T] {
-	return &StubInterface{
-		setupWeirdFunc1: newMock[func(a any, b interface {
+	return &StubInterface[T]{
+		setupWeirdFunc1: mockSetup.NewMock[func(a any, b interface {
 			A() int
 		})](t),
-		setupWeirdFunc2: newMock[func(in *<-chan time.Time, outs ...chan int) error](t),
-		setupEmpty:      newMock[func()](t),
-		setupWeirdFunc3: newMock[func(a0 map[stub.T]func(in ...*chan<- time.Time)) stub.T](t),
+		setupWeirdFunc2: mockSetup.NewMock[func(in *<-chan time.Time, outs ...chan int) error](t),
+		setupEmpty:      mockSetup.NewMock[func()](t),
+		setupWeirdFunc3: mockSetup.NewMock[func(a0 map[T]func(in ...*chan<- time.Time)) T](t),
 	}
 }
 
-func (s *StubInterface) AssertExpectations(t *testing.T) bool {
+func (s *StubInterface[T]) AssertExpectations(t *testing.T) bool {
 	return s.setupWeirdFunc1.AssertExpectations(t) &&
 		s.setupWeirdFunc2.AssertExpectations(t) &&
 		s.setupEmpty.AssertExpectations(t) &&
@@ -38,52 +37,52 @@ func (s *StubInterface) AssertExpectations(t *testing.T) bool {
 		true
 }
 
-func (s *StubInterface) OnWeirdFunc1(funcs ...func(a any, b interface {
+func (s *StubInterface[T]) OnWeirdFunc1(funcs ...func(a any, b interface {
 	A() int
-})) Config {
-	return s.setupWeirdFunc1.append(funcs...)
+})) mockSetup.Config {
+	return s.setupWeirdFunc1.Append(funcs...)
 }
 
 func (s *StubInterface[T]) WeirdFunc1(a any, b interface {
 	A() int
 }) {
-	f, ok := s.setupWeirdFunc1.call()
+	f, ok := s.setupWeirdFunc1.Call()
 	if !ok {
 		panic(fmt.Sprintf("unexpected call WeirdFunc1(%v,%v)", a, b))
 	}
 	(*f)(a, b)
 }
 
-func (s *StubInterface) OnWeirdFunc2(funcs ...func(in *<-chan time.Time, outs ...chan int) error) Config {
-	return s.setupWeirdFunc2.append(funcs...)
+func (s *StubInterface[T]) OnWeirdFunc2(funcs ...func(in *<-chan time.Time, outs ...chan int) error) mockSetup.Config {
+	return s.setupWeirdFunc2.Append(funcs...)
 }
 
 func (s *StubInterface[T]) WeirdFunc2(in *<-chan time.Time, outs ...chan int) error {
-	f, ok := s.setupWeirdFunc2.call()
+	f, ok := s.setupWeirdFunc2.Call()
 	if !ok {
 		panic(fmt.Sprintf("unexpected call WeirdFunc2(%v,%v)", in, outs))
 	}
 	return (*f)(in, outs...)
 }
 
-func (s *StubInterface) OnEmpty(funcs ...func()) Config {
-	return s.setupEmpty.append(funcs...)
+func (s *StubInterface[T]) OnEmpty(funcs ...func()) mockSetup.Config {
+	return s.setupEmpty.Append(funcs...)
 }
 
 func (s *StubInterface[T]) Empty() {
-	f, ok := s.setupEmpty.call()
+	f, ok := s.setupEmpty.Call()
 	if !ok {
 		panic(fmt.Sprintf("unexpected call Empty()"))
 	}
 	(*f)()
 }
 
-func (s *StubInterface) OnWeirdFunc3(funcs ...func(a0 map[stub.T]func(in ...*chan<- time.Time)) stub.T) Config {
-	return s.setupWeirdFunc3.append(funcs...)
+func (s *StubInterface[T]) OnWeirdFunc3(funcs ...func(a0 map[T]func(in ...*chan<- time.Time)) T) mockSetup.Config {
+	return s.setupWeirdFunc3.Append(funcs...)
 }
 
-func (s *StubInterface[T]) WeirdFunc3(a0 map[stub.T]func(in ...*chan<- time.Time)) stub.T {
-	f, ok := s.setupWeirdFunc3.call()
+func (s *StubInterface[T]) WeirdFunc3(a0 map[T]func(in ...*chan<- time.Time)) T {
+	f, ok := s.setupWeirdFunc3.Call()
 	if !ok {
 		panic(fmt.Sprintf("unexpected call WeirdFunc3(%v)", a0))
 	}

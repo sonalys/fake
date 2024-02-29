@@ -11,12 +11,13 @@ import (
 )
 
 type ParsedInterface struct {
-	ParsedFile     *ParsedFile
-	Type           *ast.TypeSpec
-	Ref            *ast.InterfaceType
-	Name           string
-	GenericsHeader string
-	GenericsName   string
+	ParsedFile             *ParsedFile
+	Type                   *ast.TypeSpec
+	Ref                    *ast.InterfaceType
+	Name                   string
+	GenericsHeader         string
+	GenericsNamelessHeader string
+	GenericsName           []string
 }
 
 func (i *ParsedInterface) ListFields() []*ParsedField {
@@ -43,18 +44,16 @@ func (g *Generator) ListInterfaceFields(i *ParsedInterface, imports map[string]*
 	return resp
 }
 
-func (f *ParsedInterface) getTypeGenerics(t *ast.TypeSpec) (string, string) {
+func (f *ParsedInterface) getTypeGenerics(t *ast.TypeSpec) (string, []string) {
 	var genericsHeader string
-	var genericsNames string
+	var genericsNames []string
 	if t.TypeParams != nil {
 		types := []string{}
-		names := []string{}
 		for _, t := range t.TypeParams.List {
 			types = append(types, fmt.Sprintf("%s %s", t.Names[0].Name, f.printAstExpr(t.Type)))
-			names = append(names, t.Names[0].Name)
+			genericsNames = append(genericsNames, t.Names[0].Name)
 		}
 		genericsHeader = fmt.Sprintf("[%s]", strings.Join(types, ","))
-		genericsNames = fmt.Sprintf("[%s]", strings.Join(names, ","))
 	}
 	return genericsHeader, genericsNames
 }
@@ -101,7 +100,7 @@ func (g *Generator) ParseInterface(ident *ast.SelectorExpr, usedImports map[stri
 	return nil
 }
 
-func (i *ParsedInterface) GetGenericsInfo() (string, string) {
+func (i *ParsedInterface) GetGenericsInfo() (string, []string) {
 	return i.getTypeGenerics(i.Type)
 }
 
@@ -109,7 +108,7 @@ func (i *ParsedInterface) WriteStruct(w io.Writer) {
 	// Write struct definition implementing the interface
 	fmt.Fprintf(w, "type %s%s struct {\n", i.Name, i.GenericsHeader)
 	for _, field := range i.ListFields() {
-		fmt.Fprintf(w, "\tsetup%s mock[", field.Name)
+		fmt.Fprintf(w, "\tsetup%s mockSetup.Mock[", field.Name)
 		i.PrintMethodHeader(w, "func", field)
 		fmt.Fprintf(w, "]\n")
 	}
@@ -117,10 +116,10 @@ func (i *ParsedInterface) WriteStruct(w io.Writer) {
 }
 
 func (i *ParsedInterface) WriteInitializer(w io.Writer) {
-	fmt.Fprintf(w, "func New%s%s(t *testing.T) *%s%s {\n", i.Name, i.GenericsHeader, i.Name, i.GenericsName)
-	fmt.Fprintf(w, "\treturn &%s{\n", i.Name)
+	fmt.Fprintf(w, "func New%s%s(t *testing.T) *%s%s {\n", i.Name, i.GenericsHeader, i.Name, i.GenericsNamelessHeader)
+	fmt.Fprintf(w, "\treturn &%s%s{\n", i.Name, i.GenericsNamelessHeader)
 	for _, field := range i.ListFields() {
-		fmt.Fprintf(w, "\t\tsetup%s: newMock[", field.Name)
+		fmt.Fprintf(w, "\t\tsetup%s: mockSetup.NewMock[", field.Name)
 		i.PrintMethodHeader(w, "func", field)
 		fmt.Fprintf(w, "](t),\n")
 	}
@@ -129,7 +128,7 @@ func (i *ParsedInterface) WriteInitializer(w io.Writer) {
 }
 
 func (i *ParsedInterface) WriteAssertExpectations(w io.Writer) {
-	fmt.Fprintf(w, "func (s *%s) AssertExpectations(t *testing.T) bool {\n", i.Name)
+	fmt.Fprintf(w, "func (s *%s%s) AssertExpectations(t *testing.T) bool {\n", i.Name, i.GenericsNamelessHeader)
 	fmt.Fprintf(w, "\treturn ")
 	for _, field := range i.ListFields() {
 		fmt.Fprintf(w, "s.setup%s.AssertExpectations(t) &&\n\t\t", field.Name)
@@ -139,16 +138,15 @@ func (i *ParsedInterface) WriteAssertExpectations(w io.Writer) {
 }
 
 func (i *ParsedInterface) WriteOnMethod(w io.Writer, methodName string, f *ParsedField) {
-	fmt.Fprintf(w, "func (s *%s) On%s(funcs ...", i.Name, methodName)
+	fmt.Fprintf(w, "func (s *%s%s) On%s(funcs ...", i.Name, i.GenericsNamelessHeader, methodName)
 	i.PrintMethodHeader(w, "func", f)
-	fmt.Fprintf(w, ") Config {\n")
-	fmt.Fprintf(w, "\treturn s.setup%s.append(funcs...)\n", methodName)
+	fmt.Fprintf(w, ") mockSetup.Config {\n")
+	fmt.Fprintf(w, "\treturn s.setup%s.Append(funcs...)\n", methodName)
 	fmt.Fprintf(w, "}\n\n")
 }
 
 func (i *ParsedInterface) WriteMethod(w io.Writer, methodName string, f *ParsedField) {
-	_, genericsNames := i.GetGenericsInfo()
-	fmt.Fprintf(w, "func (s *%s%s) ", i.Name, genericsNames)
+	fmt.Fprintf(w, "func (s *%s%s) ", i.Name, i.GenericsNamelessHeader)
 	i.PrintMethodHeader(w, methodName, f)
 	fmt.Fprintf(w, "{\n")
 	var callingNames []string
@@ -168,7 +166,7 @@ func (i *ParsedInterface) WriteMethod(w io.Writer, methodName string, f *ParsedF
 			argFlag = append(argFlag, "%v")
 		}
 	}
-	fmt.Fprintf(w, "\tf, ok := s.setup%s.call()\n", methodName)
+	fmt.Fprintf(w, "\tf, ok := s.setup%s.Call()\n", methodName)
 	fmt.Fprintf(w, "\tif !ok {\n")
 	fmt.Fprintf(
 		w, "\t\tpanic(fmt.Sprintf(\"unexpected call %s(%s)\", %v))\n",

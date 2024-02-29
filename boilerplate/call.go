@@ -6,32 +6,58 @@ import (
 )
 
 type (
+	// Config represents the configuration for all the functions passed to the On... function.
 	Config interface {
+		// Repeat sets how many times the function group should be called, note that if more than 1 function is given,
+		// all the functions should repeat n times.
+		// Repeat is 1 by default, meaning that functions can only be called 1 time.
+		// Set Repeat(-1) to allow the group to repeat indefinitely.
 		Repeat(times int)
+		// Maybe sets the group as not required for AssertExpectations,
+		// meaning that the function group will not fail the test if not called.
+		Maybe()
 	}
 
-	call[T any] struct {
+	Call[T any] struct {
 		lock   *sync.Mutex
 		repeat int
+		maybe  bool
 		cur    int
 		hooks  []T
 	}
 
-	mock[T any] struct {
+	Mock[T any] struct {
 		lock  *sync.Mutex
-		calls []*call[T]
+		calls []*Call[T]
 	}
 )
 
 var (
+	// RepeatForever, can be used with:
+	//	OnMock().Repeat(mocks.RepeatForever).
 	RepeatForever int = -1
 )
 
+// setupLocker is a sync.Once func to configure sync.Mutex in case newMock wasn't called.
 func setupLocker() *sync.Mutex { return &sync.Mutex{} }
 
-func newMock[T any](t *testing.T) mock[T] {
-	value := mock[T]{
-		lock: &sync.Mutex{},
+func (c *Call[T]) Repeat(times int) {
+	c.lock = sync.OnceValue(setupLocker)()
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.repeat = times
+}
+
+func (c *Call[T]) Maybe() {
+	c.lock = sync.OnceValue(setupLocker)()
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.maybe = true
+}
+
+func NewMock[T any](t *testing.T) Mock[T] {
+	value := Mock[T]{
+		lock: sync.OnceValue(setupLocker)(),
 	}
 	t.Cleanup(func() {
 		value.AssertExpectations(t)
@@ -39,14 +65,18 @@ func newMock[T any](t *testing.T) mock[T] {
 	return value
 }
 
-func (c *mock[T]) AssertExpectations(t *testing.T) bool {
+// AssertExpectations asserts that all expected function calls have been called.
+// Returns true if all expectations were met, otherwise returns false.
+func (c *Mock[T]) AssertExpectations(t *testing.T) bool {
 	c.lock = sync.OnceValue(setupLocker)()
 	c.lock.Lock()
 	defer c.lock.Unlock()
-
 	var missingCalls int
 	for _, call := range c.calls {
 		call.lock.Lock()
+		if call.maybe {
+			continue
+		}
 		if call.repeat <= 0 {
 			call.repeat = 1
 		}
@@ -60,14 +90,10 @@ func (c *mock[T]) AssertExpectations(t *testing.T) bool {
 	return true
 }
 
-func (c *call[T]) Repeat(times int) {
-	c.lock = sync.OnceValue(setupLocker)()
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	c.repeat = times
-}
-
-func (c *call[T]) draw() (f T, empty bool) {
+// Draw is a card Draw design, in which each call determines when to get removed from the deck.
+// if repeat == 0, the call gets removed from deck.
+// setting repeat = -1 will skip this condition, allowing it to repeat indefinitely through the group.
+func (c *Call[T]) Draw() (f T, empty bool) {
 	c.lock = sync.OnceValue(setupLocker)()
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -80,25 +106,29 @@ func (c *call[T]) draw() (f T, empty bool) {
 	return f, c.repeat == -1
 }
 
-func (c *mock[T]) call() (*T, bool) {
+// Call returns a func of type T and a bool from the deck.
+// It either returns (func, true) or (nil, false).
+func (c *Mock[T]) Call() (*T, bool) {
 	c.lock = sync.OnceValue(setupLocker)()
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	if len(c.calls) == 0 {
 		return nil, false
 	}
-	first, empty := c.calls[0].draw()
+	first, empty := c.calls[0].Draw()
 	if empty {
 		c.calls = c.calls[1:]
 	}
 	return &first, true
 }
 
-func (c *mock[T]) append(f ...T) Config {
+// Append creates a new card for the group of functions given, returning Config.
+// With Config you can configure the group expectations.
+func (c *Mock[T]) Append(f ...T) Config {
 	c.lock = sync.OnceValue(setupLocker)()
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	call := &call[T]{
+	call := &Call[T]{
 		hooks: f,
 		lock:  &sync.Mutex{},
 	}
