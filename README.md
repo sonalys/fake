@@ -4,6 +4,10 @@ Fake is a Go type-safe mocking library!
 
 Automatically create type-safe mocks for any public interface.
 
+Fake requires a `go module` and Go 1.22.
+
+It uses generics and static analysis for code generation.
+
 ## Installation
 
 ### Go install
