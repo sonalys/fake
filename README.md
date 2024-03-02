@@ -45,33 +45,26 @@ The flags are:
 
 ## Example
 
-Running against our weird interface
+A very simple example would be:
 
 ```go
-type StubInterface[T comparable] interface {
-	WeirdFunc1(a any, b interface {
-		A() int
-	})
-	WeirdFunc2(in *<-chan time.Time, outs ...chan int) error
-	Empty()
-	WeirdFunc3(map[T]func(in ...*chan<- time.Time)) T
+type UserDB interface {
+	Login(userID string) error
 }
 ```
 
 Will generate the following mock:
 
 ```go
-type StubInterface[T comparable] struct {
-	setupWeirdFunc1 mockSetup.Mock[func(a any, b interface {
-		A() int
-	})]
-	setupWeirdFunc2 mockSetup.Mock[func(in *<-chan time.Time, outs ...chan int) error]
-	setupEmpty      mockSetup.Mock[func()]
-	setupWeirdFunc3 mockSetup.Mock[func(a0 map[T]func(in ...*chan<- time.Time)) T]
+type UserDB interface {
+	Login(userID string) error
+}
+type StubInterface struct {
+	setupLogin      mockSetup.Mock[func(userID string) error]
 }
 
-func (s *StubInterface[T]) OnWeirdFunc1(funcs ...func(a any, b interface { A() int })) Config
-func (s *StubInterface[T]) WeirdFunc1(a any, b interface { A() int })
+func (s *StubInterface[T]) OnLogin(funcs ...func(userID string) error) Config
+func (s *StubInterface[T]) Login(userID string) error
 ...
 ```
 
@@ -80,26 +73,17 @@ So you can use it like this
 ```go
 
 func Test_Stub(t *testing.T) {
-  mock := mocks.NewStubInterface[int](t) // Setup call expectations
-  mock.OnWeirdFunc1(func(a any, b interface { A() int }) {
-    require.NotNil(t, a)
-    ...
+  mock := mocks.NewUserDB(t) // Setup call expectations
+  config := mock.OnLogin(func(userID string) error {
+    require.NotEmpty(t, userID)
+    return nil
   })
-  var Stub StubInterface[int] = mock
-  Stub.WeirdFunc1(1, nil) // Will call the previous function.
+  // Here you can configure it with:
+  config.Repeat(1) // Repeat 1 is default behavior.
+  // or with .Maybe(), which won't fail tests it not called.
+  config.Maybe()
+  
+  var userDB UserDB = mock
+  userDB.Login("userID") // Will call the previous function.
 }
-```
-
-You can pass more than one function or set repetition groups with
-
-```go
-mock.OnWeirdFunc1(func(a any, b interface { A() int }) {
-  require.NotNil(t, a)
-  ...
-}).Repeat(2)
-// or
-mock.OnWeirdFunc1(func(a any, b interface { A() int }) {
-  require.NotNil(t, a)
-  ...
-}).Maybe()
 ```
