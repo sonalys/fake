@@ -5,11 +5,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/sonalys/fake"
+	"golang.org/x/tools/go/packages"
 	"io"
 	"os"
 	"path/filepath"
-	"slices"
-	"strings"
 )
 
 const (
@@ -18,11 +18,11 @@ const (
 
 // CompareFileHashes identifies changed files in directories by comparing current to stored hashes.
 // Returns a list of changed files and any errors encountered.
-func CompareFileHashes(inputDirs []string) ([]string, error) {
+func CompareFileHashes(inputDirs, ignore []string) ([]string, error) {
 	res := make([]string, 0)
 
 	for _, dir := range inputDirs {
-		files, err := getFiles(dir)
+		files, err := fake.ListGoFiles(dir, ignore)
 		if err != nil {
 			return nil, fmt.Errorf("getFiles: %w", err)
 		}
@@ -30,6 +30,8 @@ func CompareFileHashes(inputDirs []string) ([]string, error) {
 		groups := groupByDirectory(files)
 
 		for dir, files := range groups {
+			CheckDependenciesChanges(files[0])
+
 			hashes, err := dirHash(files)
 			if err != nil {
 				return nil, fmt.Errorf("dirHash: %w", err)
@@ -60,25 +62,6 @@ func CompareFileHashes(inputDirs []string) ([]string, error) {
 
 	}
 	return res, nil
-}
-
-// getFiles returns a list of all .go files and fake.lock.json in a directory with absolute paths
-func getFiles(root string) ([]string, error) {
-	var files []string
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if !info.IsDir() && (strings.HasSuffix(info.Name(), ".go") && !strings.HasSuffix(info.Name(), "_test.go") && !strings.HasSuffix(info.Name(), ".gen.go")) && !slices.Contains(files, path) {
-			files = append(files, path)
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return files, nil
 }
 
 // groupByDirectory takes a list of absolute paths files and groups them by directory
@@ -143,4 +126,32 @@ func cmpHashes(jsonHashes, calcHashes map[string]string) []string {
 	}
 
 	return res
+}
+
+// CheckDependenciesChanges проверяет, меняются ли зависимости для файла .go
+func CheckDependenciesChanges(file string) (bool, error) {
+	// Загрузить информацию о пакете до изменения файла
+	before, err := loadPackageInfo(file)
+	if err != nil {
+		return false, err
+	}
+
+	fmt.Printf("file: %s, before: %v\n", file, before.Imports)
+	// Сравнить списки зависимостей
+	return true, nil
+}
+
+// loadPackageInfo загружает информацию о пакете для данного файла
+func loadPackageInfo(file string) (*packages.Package, error) {
+	cfg := &packages.Config{
+		Mode: packages.NeedImports,
+	}
+	pkgs, err := packages.Load(cfg, file)
+	if err != nil {
+		return nil, err
+	}
+	if packages.PrintErrors(pkgs) > 0 {
+		return nil, fmt.Errorf("encountered errors while loading package information")
+	}
+	return pkgs[0], nil
 }

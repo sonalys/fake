@@ -40,7 +40,7 @@ func main() {
 		input = []string{"."}
 	}
 
-	input, err := hashCheck.CompareFileHashes(input)
+	input, err := hashCheck.CompareFileHashes(input, ignore)
 
 	if err != nil {
 		log.Fatal().Err(err).Msg("Error comparing file hashes")
