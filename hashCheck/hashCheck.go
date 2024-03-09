@@ -7,12 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"github.com/sonalys/fake"
-	"go/build"
 	"go/parser"
 	"go/token"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const (
@@ -126,19 +126,21 @@ func loadPackageInfo(file string) ([]string, error) {
 
 	imports := make([]string, len(f.Imports))
 	for i, imp := range f.Imports {
-		imports[i] = imp.Path.Value
+		imports[i] = strings.Trim(imp.Path.Value, `"`)
 	}
 
 	return imports, nil
 }
 
 func getPackagePath(importPath string) (string, error) {
-	pkg, err := build.Import(importPath, "", build.FindOnly)
-	if err != nil {
-		return "", err
+	gopath := os.Getenv("GOPATH")
+	if gopath == "" {
+		return "", errors.New("GOPATH environment variable is not set")
 	}
 
-	return pkg.Dir, nil
+	goSumPath := filepath.Join(gopath, "src", importPath, "go.sum")
+
+	return goSumPath, nil
 }
 
 // TODO: remove
