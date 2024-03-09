@@ -7,12 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/sonalys/fake"
-	"go/parser"
-	"go/token"
+	"golang.org/x/tools/go/packages"
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 const (
@@ -29,45 +27,47 @@ func CompareFileHashes(inputDirs, ignore []string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
+		groups := groupByDirectory(files)
 
-		model, err := parseJsonModel(dir)
-		if err != nil {
-			return nil, fmt.Errorf("parseJsonModel: %w", err)
-		}
+		for group, data := range groups {
+			model, err := parseJsonModel(group)
 
-		for _, file := range files {
-
-			imports, err := getPackagesGosum(file)
 			if err != nil {
-				return nil, fmt.Errorf("getImportPath: %w", err)
+				return nil, fmt.Errorf("parseJsonModel: %w", err)
 			}
 
-			goSum, err := hashFiles(imports...)
+			for _, file := range data {
+
+				imports, err := getPackagesGosum(file)
+				if err != nil {
+					return nil, fmt.Errorf("getImportPath: %w", err)
+				}
+
+				goSum, err := hashFiles(imports...)
+				if err != nil {
+					return nil, fmt.Errorf("hashFiles: %w", err)
+				}
+
+				hash, err := hashFiles(file)
+				if err != nil {
+					return nil, fmt.Errorf("hashFiles: %w", err)
+				}
+
+				if model[file].Hash != hash || model[file].GoSum != goSum {
+					res = append(res, file)
+				}
+
+				model[file] = FileHashData{
+					Hash:  hash,
+					GoSum: goSum,
+				}
+
+			}
+			err = saveHashToFile(dir, group, model)
 			if err != nil {
-				return nil, fmt.Errorf("hashFiles: %w", err)
+				return nil, fmt.Errorf("saveHashToFile: %w", err)
 			}
 
-			hash, err := hashFiles(file)
-			if err != nil {
-				return nil, fmt.Errorf("hashFiles: %w", err)
-			}
-
-			if model[file].Hash != hash || model[file].GoSum != goSum {
-				res = append(res, file)
-			}
-
-			model[file] = FileHashData{
-				Hash:  hash,
-				GoSum: goSum,
-			}
-
-		}
-
-		//fmt.Printf("model: %v\n", model)
-		fmt.Printf("dir: %s\n", dir)
-		err = saveHashToFile(dir, model)
-		if err != nil {
-			return nil, fmt.Errorf("saveHashToFile: %w", err)
 		}
 
 	}
@@ -75,8 +75,17 @@ func CompareFileHashes(inputDirs, ignore []string) ([]string, error) {
 	return res, nil
 }
 
+func groupByDirectory(files []string) map[string][]string { //V2
+	groups := make(map[string][]string)
+	for _, file := range files {
+		dir := filepath.Dir(file)
+		groups[dir] = append(groups[dir], file)
+	}
+	return groups
+}
+
 func parseJsonModel(path string) (Hashes, error) {
-	data, err := os.ReadFile(filepath.Join(path, fileName))
+	data, err := os.ReadFile(filepath.Join("mocks", path, fileName))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return Hashes{}, nil
@@ -97,50 +106,46 @@ func getPackagesGosum(file string) ([]string, error) {
 	res := make([]string, 0)
 
 	imports, err := loadPackageInfo(file)
-	fmt.Printf("imports: %v\n", imports)
 	if err != nil {
 		return nil, fmt.Errorf("loadPackageInfo: %w", err)
 	}
 
 	for _, importName := range imports {
-		path, err := getPackagePath(importName)
-		fmt.Printf("path: %s\n", path)
+		path := getPackagePath(importName)
 
-		if err != nil {
-			return nil, fmt.Errorf("getPackagePath: %w", err)
-		}
-		goSumPath := filepath.Join(path, "go.sum")
-
-		res = append(res, goSumPath)
+		res = append(res, path)
 	}
 
 	return res, nil
 }
 
 func loadPackageInfo(file string) ([]string, error) {
-	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, file, nil, parser.ImportsOnly)
+	cfg := &packages.Config{
+		Mode: packages.NeedImports,
+	}
+	pkgs, err := packages.Load(cfg, file)
 	if err != nil {
 		return nil, err
 	}
 
-	imports := make([]string, len(f.Imports))
-	for i, imp := range f.Imports {
-		imports[i] = strings.Trim(imp.Path.Value, `"`)
+	if packages.PrintErrors(pkgs) > 0 {
+		return nil, errors.New("packages.Load: errors while loading package")
+	}
+
+	var imports []string
+	for _, pkg := range pkgs {
+		for imp := range pkg.Imports {
+			imports = append(imports, imp)
+		}
 	}
 
 	return imports, nil
 }
 
-func getPackagePath(importPath string) (string, error) {
+func getPackagePath(importPath string) string {
 	gopath := os.Getenv("GOPATH")
-	if gopath == "" {
-		return "", errors.New("GOPATH environment variable is not set")
-	}
-
-	goSumPath := filepath.Join(gopath, "src", importPath, "go.sum")
-
-	return goSumPath, nil
+	goSumPath := filepath.Join(gopath, "pkg", "mod", importPath, "go.sum")
+	return goSumPath
 }
 
 // TODO: remove
@@ -153,20 +158,34 @@ func getGoFiles(dir string, ignore []string) ([]string, error) {
 	return files, nil
 }
 
+//func groupByDirectory(files Hashes) map[string]Hashes { //V1
+//	groups := make(map[string]Hashes)
+//	for file, data := range files {
+//		dir := filepath.Dir(file)
+//		if _, ok := groups[dir]; !ok {
+//			groups[dir] = make(Hashes)
+//		}
+//		groups[dir][file] = data
+//	}
+//	return groups
+//}
+
 // TODO: use group by dir
-func saveHashToFile(dir string, hash map[string]FileHashData) error {
+func saveHashToFile(root, dir string, hash map[string]FileHashData) error {
+
 	data, err := json.Marshal(hash)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("hash: %v\n", hash)
-	err = os.MkdirAll(filepath.Join("mocks", dir), os.ModePerm)
+	err = os.MkdirAll(filepath.Join(root, "mocks", dir), os.ModePerm)
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(filepath.Join("mocks", dir, fileName), data, 0644)
+	os.WriteFile(filepath.Join(root, "mocks", dir, fileName), data, 0644)
+
+	return nil
 }
 
 // hashFiles returns the SHA256 hash of files
@@ -177,7 +196,6 @@ func hashFiles(files ...string) (string, error) {
 		f, err := os.Open(file)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
-				//fmt.Printf("File %s does not exist\n", file)
 				continue
 			}
 			return "", err
