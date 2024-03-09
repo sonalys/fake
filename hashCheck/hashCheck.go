@@ -4,9 +4,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/sonalys/fake"
-	"golang.org/x/tools/go/packages"
+	"go/build"
+	"go/parser"
+	"go/token"
 	"io"
 	"os"
 	"path/filepath"
@@ -22,136 +25,169 @@ func CompareFileHashes(inputDirs, ignore []string) ([]string, error) {
 	res := make([]string, 0)
 
 	for _, dir := range inputDirs {
-		files, err := fake.ListGoFiles(dir, ignore)
-		if err != nil {
-			return nil, fmt.Errorf("getFiles: %w", err)
-		}
-
-		groups := groupByDirectory(files)
-
-		for dir, files := range groups {
-			CheckDependenciesChanges(files[0])
-
-			hashes, err := dirHash(files)
-			if err != nil {
-				return nil, fmt.Errorf("dirHash: %w", err)
-			}
-
-			if _, err := os.Stat(filepath.Join(dir, fileName)); !os.IsNotExist(err) {
-				jsonHashes := make(map[string]string)
-				tmp, err := os.ReadFile(filepath.Join(dir, fileName))
-
-				if err != nil {
-					return nil, err
-				}
-
-				err = json.Unmarshal(tmp, &jsonHashes)
-				if err != nil {
-					return nil, fmt.Errorf("json.Unmarshal: %w", err)
-				}
-				res = append(res, cmpHashes(jsonHashes, hashes)...)
-			} else {
-				res = append(res, files...)
-			}
-
-			err = saveHashesToFile(hashes, filepath.Join(dir, fileName))
-			if err != nil {
-				return nil, fmt.Errorf("saveHashesToFile: %w", err)
-			}
-		}
-
-	}
-	return res, nil
-}
-
-// groupByDirectory takes a list of absolute paths files and groups them by directory
-func groupByDirectory(files []string) map[string][]string {
-	groups := make(map[string][]string)
-	for _, file := range files {
-		dir := filepath.Dir(file)
-		groups[dir] = append(groups[dir], file)
-	}
-	return groups
-}
-
-// dirHash generates a hash for each file returning a map of fileName : hash
-func dirHash(files []string) (map[string]string, error) {
-	hashes := make(map[string]string)
-	for _, file := range files {
-		hash, err := hashFile(file)
+		files, err := getGoFiles(dir, ignore)
 		if err != nil {
 			return nil, err
 		}
-		hashes[file] = hash
+
+		model, err := parseJsonModel(dir)
+		if err != nil {
+			return nil, fmt.Errorf("parseJsonModel: %w", err)
+		}
+
+		for _, file := range files {
+
+			imports, err := getPackagesGosum(file)
+			if err != nil {
+				return nil, fmt.Errorf("getImportPath: %w", err)
+			}
+
+			goSum, err := hashFiles(imports...)
+			if err != nil {
+				return nil, fmt.Errorf("hashFiles: %w", err)
+			}
+
+			hash, err := hashFiles(file)
+			if err != nil {
+				return nil, fmt.Errorf("hashFiles: %w", err)
+			}
+
+			if model[file].Hash != hash || model[file].GoSum != goSum {
+				res = append(res, file)
+			}
+
+			model[file] = FileHashData{
+				Hash:  hash,
+				GoSum: goSum,
+			}
+
+		}
+
+		//fmt.Printf("model: %v\n", model)
+		fmt.Printf("dir: %s\n", dir)
+		err = saveHashToFile(dir, model)
+		if err != nil {
+			return nil, fmt.Errorf("saveHashToFile: %w", err)
+		}
+
 	}
 
-	return hashes, nil
+	return res, nil
 }
 
-// saveHashesToFile saves the hashes to a "fake.lock.json" file
-func saveHashesToFile(hashes map[string]string, filePath string) error {
-	data, err := json.Marshal(hashes)
+func parseJsonModel(path string) (Hashes, error) {
+	data, err := os.ReadFile(filepath.Join(path, fileName))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return Hashes{}, nil
+		}
+		return nil, err
+	}
+
+	var model Hashes
+	err = json.Unmarshal(data, &model)
+	if err != nil {
+		return nil, err
+	}
+
+	return model, nil
+}
+
+func getPackagesGosum(file string) ([]string, error) {
+	res := make([]string, 0)
+
+	imports, err := loadPackageInfo(file)
+	fmt.Printf("imports: %v\n", imports)
+	if err != nil {
+		return nil, fmt.Errorf("loadPackageInfo: %w", err)
+	}
+
+	for _, importName := range imports {
+		path, err := getPackagePath(importName)
+		fmt.Printf("path: %s\n", path)
+
+		if err != nil {
+			return nil, fmt.Errorf("getPackagePath: %w", err)
+		}
+		goSumPath := filepath.Join(path, "go.sum")
+
+		res = append(res, goSumPath)
+	}
+
+	return res, nil
+}
+
+func loadPackageInfo(file string) ([]string, error) {
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, file, nil, parser.ImportsOnly)
+	if err != nil {
+		return nil, err
+	}
+
+	imports := make([]string, len(f.Imports))
+	for i, imp := range f.Imports {
+		imports[i] = imp.Path.Value
+	}
+
+	return imports, nil
+}
+
+func getPackagePath(importPath string) (string, error) {
+	pkg, err := build.Import(importPath, "", build.FindOnly)
+	if err != nil {
+		return "", err
+	}
+
+	return pkg.Dir, nil
+}
+
+// TODO: remove
+func getGoFiles(dir string, ignore []string) ([]string, error) {
+	files, err := fake.ListGoFiles(dir, ignore)
+	if err != nil {
+		return nil, fmt.Errorf("getFiles: %w", err)
+	}
+
+	return files, nil
+}
+
+// TODO: use group by dir
+func saveHashToFile(dir string, hash map[string]FileHashData) error {
+	data, err := json.Marshal(hash)
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(filePath, data, 0644)
-}
-
-// hashFile returns the SHA256 hash of a single file
-func hashFile(file string) (string, error) {
-	f, err := os.Open(file)
+	fmt.Printf("hash: %v\n", hash)
+	err = os.MkdirAll(filepath.Join("mocks", dir), os.ModePerm)
 	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", err
+		return err
 	}
 
-	return hex.EncodeToString(h.Sum(nil)), nil
+	return os.WriteFile(filepath.Join("mocks", dir, fileName), data, 0644)
 }
 
-// cmpHashes compares the hashes from the json file with the calculated hashes
-// returns a list of files that have changed
-func cmpHashes(jsonHashes, calcHashes map[string]string) []string {
-	res := make([]string, 0)
+// hashFiles returns the SHA256 hash of files
+func hashFiles(files ...string) (string, error) {
+	hasher := sha256.New()
 
-	for k, v := range calcHashes {
-		if jsonHashes[k] != v {
-			res = append(res, k)
+	for _, file := range files {
+		f, err := os.Open(file)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				//fmt.Printf("File %s does not exist\n", file)
+				continue
+			}
+			return "", err
 		}
+
+		if _, err := io.Copy(hasher, f); err != nil {
+			f.Close()
+			return "", err
+		}
+
+		f.Close()
 	}
 
-	return res
-}
-
-// CheckDependenciesChanges проверяет, меняются ли зависимости для файла .go
-func CheckDependenciesChanges(file string) (bool, error) {
-	// Загрузить информацию о пакете до изменения файла
-	before, err := loadPackageInfo(file)
-	if err != nil {
-		return false, err
-	}
-
-	fmt.Printf("file: %s, before: %v\n", file, before.Imports)
-	// Сравнить списки зависимостей
-	return true, nil
-}
-
-// loadPackageInfo загружает информацию о пакете для данного файла
-func loadPackageInfo(file string) (*packages.Package, error) {
-	cfg := &packages.Config{
-		Mode: packages.NeedImports,
-	}
-	pkgs, err := packages.Load(cfg, file)
-	if err != nil {
-		return nil, err
-	}
-	if packages.PrintErrors(pkgs) > 0 {
-		return nil, fmt.Errorf("encountered errors while loading package information")
-	}
-	return pkgs[0], nil
+	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
