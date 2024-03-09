@@ -17,16 +17,16 @@ const (
 	fileName = "fake.lock.json"
 )
 
-// CompareFileHashes identifies changed files in directories by comparing current to stored hashes.
-// Returns a list of changed files and any errors encountered.
 func CompareFileHashes(inputDirs, ignore []string) ([]string, error) {
 	res := make([]string, 0)
 
 	for _, dir := range inputDirs {
-		files, err := getGoFiles(dir, ignore)
+
+		files, err := fake.ListGoFiles(dir, ignore)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("getFiles: %w", err)
 		}
+
 		groups := groupByDirectory(files)
 
 		for group, data := range groups {
@@ -75,7 +75,35 @@ func CompareFileHashes(inputDirs, ignore []string) ([]string, error) {
 	return res, nil
 }
 
-func groupByDirectory(files []string) map[string][]string { //V2
+/*
+groupByDirectory groups files by their directory
+Example:
+
+Input:
+
+	files := []string{
+		"/home/user/documents/file1.txt",
+		"/home/user/documents/file2.txt",
+		"/home/user/images/image1.png",
+		"/home/user/images/image2.png",
+		"/home/user/images/image3.png",
+	}
+
+Output:
+
+		{
+		"/home/user/documents": []string{
+			"/home/user/documents/file1.txt",
+			"/home/user/documents/file2.txt",
+		},
+		"/home/user/images": []string{
+			"/home/user/images/image1.png",
+			"/home/user/images/image2.png",
+			"/home/user/images/image3.png",
+		},
+	}
+*/
+func groupByDirectory(files []string) map[string][]string {
 	groups := make(map[string][]string)
 	for _, file := range files {
 		dir := filepath.Dir(file)
@@ -84,6 +112,7 @@ func groupByDirectory(files []string) map[string][]string { //V2
 	return groups
 }
 
+// parseJsonModel reads and parses the json model from the fake.lock.json file
 func parseJsonModel(path string) (Hashes, error) {
 	data, err := os.ReadFile(filepath.Join("mocks", path, fileName))
 	if err != nil {
@@ -102,12 +131,16 @@ func parseJsonModel(path string) (Hashes, error) {
 	return model, nil
 }
 
+/*
+getPackagesGosum takes path to a .go file
+returns a list of go.sum files for the given file's dependencies
+*/
 func getPackagesGosum(file string) ([]string, error) {
 	res := make([]string, 0)
 
-	imports, err := loadPackageInfo(file)
+	imports, err := loadPackageImports(file)
 	if err != nil {
-		return nil, fmt.Errorf("loadPackageInfo: %w", err)
+		return nil, fmt.Errorf("loadPackageImports: %w", err)
 	}
 
 	for _, importName := range imports {
@@ -119,7 +152,8 @@ func getPackagesGosum(file string) ([]string, error) {
 	return res, nil
 }
 
-func loadPackageInfo(file string) ([]string, error) {
+// loadPackageImports returns a list of imports for a given .go file
+func loadPackageImports(file string) ([]string, error) {
 	cfg := &packages.Config{
 		Mode: packages.NeedImports,
 	}
@@ -142,37 +176,21 @@ func loadPackageInfo(file string) ([]string, error) {
 	return imports, nil
 }
 
+// getPackagePath returns the path to the go.sum file for a given import path
 func getPackagePath(importPath string) string {
 	gopath := os.Getenv("GOPATH")
 	goSumPath := filepath.Join(gopath, "pkg", "mod", importPath, "go.sum")
 	return goSumPath
 }
 
-// TODO: remove
-func getGoFiles(dir string, ignore []string) ([]string, error) {
-	files, err := fake.ListGoFiles(dir, ignore)
-	if err != nil {
-		return nil, fmt.Errorf("getFiles: %w", err)
-	}
-
-	return files, nil
-}
-
-//func groupByDirectory(files Hashes) map[string]Hashes { //V1
-//	groups := make(map[string]Hashes)
-//	for file, data := range files {
-//		dir := filepath.Dir(file)
-//		if _, ok := groups[dir]; !ok {
-//			groups[dir] = make(Hashes)
-//		}
-//		groups[dir][file] = data
-//	}
-//	return groups
-//}
-
-// TODO: use group by dir
+/*
+The saveHashToFile function takes two strings representing the root directory (root) from user input
+and the target directory (dir), as well as a hash map (hash).
+This function saves the hash map to a fake.lock.json file in the specified directory.
+*/
 func saveHashToFile(root, dir string, hash map[string]FileHashData) error {
-
+	fmt.Printf("root: %s\n", root)
+	fmt.Printf("dir: %s\n", dir)
 	data, err := json.Marshal(hash)
 	if err != nil {
 		return err

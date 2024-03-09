@@ -50,7 +50,8 @@ func main() {
 		log.Info().Msg("No files have changed")
 		return
 	}
-	fmt.Printf("Changed files: %v\n", input)
+
+	log.Info().Msgf("Changed files: %v", input)
 
 	mockgen.Run(input, *output, ignore)
 }
