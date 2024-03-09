@@ -189,8 +189,7 @@ and the target directory (dir), as well as a hash map (hash).
 This function saves the hash map to a fake.lock.json file in the specified directory.
 */
 func saveHashToFile(root, dir string, hash map[string]FileHashData) error {
-	fmt.Printf("root: %s\n", root)
-	fmt.Printf("dir: %s\n", dir)
+
 	data, err := json.Marshal(hash)
 	if err != nil {
 		return err
