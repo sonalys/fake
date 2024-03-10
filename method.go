@@ -16,9 +16,14 @@ func (f *ParsedInterface) WriteMethodResults(implFile io.Writer, results []*ast.
 	if len(results) == 0 {
 		return
 	}
-	fmt.Fprintf(implFile, " (")
+	fmt.Fprintf(implFile, " ")
+	if len(results) > 1 {
+		fmt.Fprintf(implFile, "(")
+	}
 	f.PrintAstFields(implFile, results, false)
-	fmt.Fprintf(implFile, ") ")
+	if len(results) > 1 {
+		fmt.Fprintf(implFile, ")")
+	}
 }
 
 func (f *ParsedInterface) PrintMethodHeader(file io.Writer, methodName string, field *ParsedField) {

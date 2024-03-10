@@ -3,6 +3,7 @@ package fake
 import (
 	"fmt"
 	"go/ast"
+	"go/token"
 	"io"
 	"strings"
 
@@ -117,7 +118,7 @@ func (g *Generator) ParseInterface(ident *ast.SelectorExpr, usedImports map[stri
 	}
 	pkg := pkgs[0]
 	for _, file := range pkg.GoFiles {
-		parsed := g.ParseFile(file)
+		parsed := NewParsedFile(g, file)
 		i, importsInfo := parsed.FindInterfaceByName(pkgType)
 		if i == nil {
 			continue
@@ -200,7 +201,7 @@ func (i *ParsedInterface) WriteOnMethod(w io.Writer, methodName string, f *Parse
 func (i *ParsedInterface) WriteMethod(w io.Writer, methodName string, f *ParsedField) {
 	fmt.Fprintf(w, "func (s *%s%s) ", i.Name, i.WriteGenericsNameHeader())
 	i.PrintMethodHeader(w, methodName, f)
-	fmt.Fprintf(w, "{\n")
+	fmt.Fprintf(w, " {\n")
 	var callingNames []string
 	funcType := f.Ref.Type.(*ast.FuncType)
 	for i := range funcType.Params.List {
@@ -248,4 +249,34 @@ func (i *ParsedInterface) WriteMock(w io.Writer) {
 	i.WriteInitializer(w)
 	i.WriteAssertExpectations(w)
 	i.WriteStructMethods(w)
+}
+
+func (i *ParsedInterface) GenerateFields() *ast.FieldList {
+	var out ast.FieldList
+	for _, field := range i.ParsedFile.Generator.ListInterfaceFields(i, i.ParsedFile.Imports) {
+		out.List = append(out.List, &ast.Field{
+			Names: []*ast.Ident{
+				ast.NewIdent(fmt.Sprintf("setup%s", field.Name)),
+			},
+			// TODO: there are no type parameter expressions for types in go 1.22 ast. :(
+			// Sel must be an *ast.Ident which is basically a string, so we would have to hardcode it which is very ugly.
+			Type: &ast.SelectorExpr{},
+		})
+	}
+	return &out
+}
+
+func (i *ParsedInterface) GenerateStruct() ast.Decl {
+	return &ast.GenDecl{
+		Tok: token.TYPE,
+		Specs: []ast.Spec{
+			&ast.TypeSpec{
+				Name:       ast.NewIdent(i.Name),
+				TypeParams: i.Type.TypeParams,
+				Type: &ast.StructType{
+					Fields: i.GenerateFields(),
+				},
+			},
+		},
+	}
 }
