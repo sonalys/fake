@@ -70,15 +70,16 @@ func (f *ParsedInterface) printAstExpr(expr ast.Expr) string {
 		}, file.Imports)
 		b := &strings.Builder{}
 		for _, method := range methods {
-			methodName := method.Ref.Names[0].Name
-			b.WriteString("\t\t")
-			f.PrintMethodHeader(b, methodName, &ParsedField{
-				Interface: f,
-				Ref: &ast.Field{
-					Type: method.Ref.Type.(*ast.FuncType),
-				},
-				Name: methodName,
-			})
+			for _, methodName := range method.Ref.Names {
+				b.WriteString("\t\t")
+				f.PrintMethodHeader(b, methodName.Name, &ParsedField{
+					Interface: f,
+					Ref: &ast.Field{
+						Type: method.Ref.Type.(*ast.FuncType),
+					},
+					Name: methodName.Name,
+				})
+			}
 		}
 		return fmt.Sprintf("interface{\n%s\n}", b.String())
 	}

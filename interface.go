@@ -29,6 +29,9 @@ func (i *ParsedInterface) ListFields() []*ParsedField {
 	return i.ParsedFile.Generator.ListInterfaceFields(i, i.ParsedFile.Imports)
 }
 
+// ListInterfaceFields receives an interface to translate fields into fields.
+// It cannot be a ParsedInterface method because we need to translate imports from the original file,
+// some interfaces are originated from external packages.
 func (g *Generator) ListInterfaceFields(i *ParsedInterface, imports map[string]*PackageInfo) []*ParsedField {
 	if i.Ref.Methods == nil {
 		return nil
@@ -37,11 +40,13 @@ func (g *Generator) ListInterfaceFields(i *ParsedInterface, imports map[string]*
 	for _, field := range i.Ref.Methods.List {
 		switch t := field.Type.(type) {
 		case *ast.FuncType:
-			resp = append(resp, &ParsedField{
-				Interface: i,
-				Ref:       field,
-				Name:      field.Names[0].Name,
-			})
+			for _, name := range field.Names {
+				resp = append(resp, &ParsedField{
+					Interface: i,
+					Ref:       field,
+					Name:      name.Name,
+				})
+			}
 		case *ast.SelectorExpr:
 			// Interface from another package.
 			resp = append(resp, g.ListInterfaceFields(g.ParseInterface(t, i.ParsedFile.UsedImports, i.ParsedFile.Imports), imports)...)
@@ -236,7 +241,7 @@ func (i *ParsedInterface) WriteMethod(w io.Writer, methodName string, f *ParsedF
 func (i *ParsedInterface) WriteStructMethods(file io.Writer) {
 	// Implement each method in the interface with dummy bodies.
 	for _, field := range i.ParsedFile.Generator.ListInterfaceFields(i, i.ParsedFile.Imports) {
-		methodName := field.Ref.Names[0].Name
+		methodName := field.Name
 		i.WriteOnMethod(file, methodName, field)
 		i.WriteMethod(file, methodName, field)
 	}
