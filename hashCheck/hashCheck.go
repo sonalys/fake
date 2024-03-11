@@ -1,6 +1,7 @@
 package hashCheck
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -10,7 +11,9 @@ import (
 	"golang.org/x/tools/go/packages"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 const (
@@ -38,12 +41,30 @@ func CompareFileHashes(inputDirs, ignore []string) ([]string, error) {
 
 			for _, file := range data {
 
-				imports, err := getPackagesGosum(file)
+				//imports, err := getPackagesGosum(file)
+				//if err != nil {
+				//	return nil, fmt.Errorf("getImportPath: %w", err)
+				//}
+
+				imports, err := loadPackageImports(file)
+
+				importPath := make([]string, len(imports))
+
 				if err != nil {
-					return nil, fmt.Errorf("getImportPath: %w", err)
+					return nil, fmt.Errorf("loadPackageImports: %w", err)
 				}
 
-				goSum, err := hashFiles(imports...)
+				for _, importName := range imports {
+					path, err := getPackagePath(importName)
+
+					if err != nil {
+						return nil, fmt.Errorf("getPackagePath: %w", err)
+					}
+
+					importPath = append(importPath, path)
+				}
+
+				goSum, err := hashFiles(importPath...)
 				if err != nil {
 					return nil, fmt.Errorf("hashFiles: %w", err)
 				}
@@ -113,6 +134,7 @@ func groupByDirectory(files []string) map[string][]string {
 }
 
 // parseJsonModel reads and parses the json model from the fake.lock.json file
+// parses file from mocks/{path}/fake.lock.json
 func parseJsonModel(path string) (Hashes, error) {
 	data, err := os.ReadFile(filepath.Join("mocks", path, fileName))
 	if err != nil {
@@ -135,22 +157,27 @@ func parseJsonModel(path string) (Hashes, error) {
 getPackagesGosum takes path to a .go file
 returns a list of go.sum files for the given file's dependencies
 */
-func getPackagesGosum(file string) ([]string, error) {
-	res := make([]string, 0)
-
-	imports, err := loadPackageImports(file)
-	if err != nil {
-		return nil, fmt.Errorf("loadPackageImports: %w", err)
-	}
-
-	for _, importName := range imports {
-		path := getPackagePath(importName)
-
-		res = append(res, path)
-	}
-
-	return res, nil
-}
+//func getPackagesGosum(file string) ([]string, error) {
+//	imports, err := loadPackageImports(file)
+//
+//	importPath := make([]string, len(imports))
+//
+//	if err != nil {
+//		return nil, fmt.Errorf("loadPackageImports: %w", err)
+//	}
+//
+//	for _, importName := range imports {
+//		path, err := getPackagePath(importName)
+//
+//		if err != nil {
+//			return nil, fmt.Errorf("getPackagePath: %w", err)
+//		}
+//
+//		importPath = append(importPath, path)
+//	}
+//
+//	return res, nil
+//}
 
 // loadPackageImports returns a list of imports for a given .go file
 func loadPackageImports(file string) ([]string, error) {
@@ -177,19 +204,27 @@ func loadPackageImports(file string) ([]string, error) {
 }
 
 // getPackagePath returns the path to the go.sum file for a given import path
-func getPackagePath(importPath string) string {
-	gopath := os.Getenv("GOPATH")
-	goSumPath := filepath.Join(gopath, "pkg", "mod", importPath, "go.sum")
-	return goSumPath
+func getPackagePath(importPath string) (string, error) {
+	cmd := exec.Command("go", "list", "-f", "{{.Dir}}", importPath)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err := cmd.Run()
+	if err != nil {
+		return "", err
+	}
+
+	// Trim the newline at the end of the output
+	path := strings.TrimSpace(out.String())
+
+	return filepath.Join(path, "go.sum"), nil
 }
 
 /*
 The saveHashToFile function takes two strings representing the root directory (root) from user input
 and the target directory (dir), as well as a hash map (hash).
-This function saves the hash map to a fake.lock.json file in the specified directory.
+It saves file at path {root}/mocks/{dir}/fake.lock.json
 */
 func saveHashToFile(root, dir string, hash map[string]FileHashData) error {
-
 	data, err := json.Marshal(hash)
 	if err != nil {
 		return err

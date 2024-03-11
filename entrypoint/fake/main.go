@@ -51,7 +51,7 @@ func main() {
 		return
 	}
 
-	log.Info().Msgf("Changed files: %v", input)
+	log.Info().Msgf("Files to mock: %v", input)
 
 	mockgen.Run(input, *output, ignore)
 }
