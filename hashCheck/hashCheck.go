@@ -1,6 +1,7 @@
 package hashCheck
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
@@ -22,6 +23,11 @@ const (
 
 func CompareFileHashes(inputDirs, ignore []string) ([]string, error) {
 	res := make([]string, 0)
+	dependencies, err := parseGoSumFile()
+
+	if err != nil {
+		return nil, fmt.Errorf("parseGoSumFile: %w", err)
+	}
 
 	for _, dir := range inputDirs {
 
@@ -41,30 +47,19 @@ func CompareFileHashes(inputDirs, ignore []string) ([]string, error) {
 
 			for _, file := range data {
 
-				//imports, err := getPackagesGosum(file)
-				//if err != nil {
-				//	return nil, fmt.Errorf("getImportPath: %w", err)
-				//}
-
 				imports, err := loadPackageImports(file)
 
-				importPath := make([]string, len(imports))
+				importHash := make([]string, len(imports))
 
 				if err != nil {
 					return nil, fmt.Errorf("loadPackageImports: %w", err)
 				}
 
 				for _, importName := range imports {
-					path, err := getPackagePath(importName)
-
-					if err != nil {
-						return nil, fmt.Errorf("getPackagePath: %w", err)
-					}
-
-					importPath = append(importPath, path)
+					importHash = append(importHash, dependencies[importName])
 				}
 
-				goSum, err := hashFiles(importPath...)
+				goSum, err := hashFiles(importHash...)
 				if err != nil {
 					return nil, fmt.Errorf("hashFiles: %w", err)
 				}
@@ -153,31 +148,33 @@ func parseJsonModel(path string) (Hashes, error) {
 	return model, nil
 }
 
-/*
-getPackagesGosum takes path to a .go file
-returns a list of go.sum files for the given file's dependencies
-*/
-//func getPackagesGosum(file string) ([]string, error) {
-//	imports, err := loadPackageImports(file)
-//
-//	importPath := make([]string, len(imports))
-//
-//	if err != nil {
-//		return nil, fmt.Errorf("loadPackageImports: %w", err)
-//	}
-//
-//	for _, importName := range imports {
-//		path, err := getPackagePath(importName)
-//
-//		if err != nil {
-//			return nil, fmt.Errorf("getPackagePath: %w", err)
-//		}
-//
-//		importPath = append(importPath, path)
-//	}
-//
-//	return res, nil
-//}
+// parseGoSumFile reads and parses the go.sum file into a map
+// import : hash
+func parseGoSumFile() (map[string]string, error) {
+	file, err := os.Open("go.sum")
+	if err != nil {
+		return nil, err
+	}
+
+	dependencies := make(map[string]string)
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		parts := strings.Fields(line)
+
+		if len(parts) == 3 {
+			dependencies[parts[0]] = parts[2]
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return dependencies, nil
+
+}
 
 // loadPackageImports returns a list of imports for a given .go file
 func loadPackageImports(file string) ([]string, error) {
