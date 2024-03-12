@@ -1,4 +1,4 @@
-package do_not_change
+package TestCompareFileHashes
 
 type Stub interface {
 	Dosomething()

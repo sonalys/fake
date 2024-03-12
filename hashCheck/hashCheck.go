@@ -2,7 +2,6 @@ package hashCheck
 
 import (
 	"bufio"
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -12,7 +11,6 @@ import (
 	"golang.org/x/tools/go/packages"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -23,7 +21,33 @@ const (
 
 func CompareFileHashes(inputDirs, ignore []string) ([]string, error) {
 	res := make([]string, 0)
-	dependencies, err := parseGoSumFile()
+
+	dir, err := os.Getwd()
+
+	if err != nil {
+		return nil, fmt.Errorf("os.Getwd: %w", err)
+	}
+
+	goModPath, err := fake.FindFile(dir, "go.sum")
+
+	if err != nil {
+		return nil, fmt.Errorf("fake.FindFile: %w", err)
+	}
+
+	dependenciesParsed, err := parseGoSumFile(goModPath)
+
+	if err != nil {
+		return nil, fmt.Errorf("parseGoSumFile: %w", err)
+	}
+
+	dependencies := make(map[string]string)
+
+	for k, v := range dependenciesParsed {
+		dependencies[k], err = hashFiles(v...)
+		if err != nil {
+			return nil, fmt.Errorf("parseGoSumFile: %w", err)
+		}
+	}
 
 	if err != nil {
 		return nil, fmt.Errorf("parseGoSumFile: %w", err)
@@ -79,7 +103,7 @@ func CompareFileHashes(inputDirs, ignore []string) ([]string, error) {
 				}
 
 			}
-			err = saveHashToFile(dir, group, model)
+			err = saveHashToFile(group, model)
 			if err != nil {
 				return nil, fmt.Errorf("saveHashToFile: %w", err)
 			}
@@ -149,14 +173,14 @@ func parseJsonModel(path string) (Hashes, error) {
 }
 
 // parseGoSumFile reads and parses the go.sum file into a map
-// import : hash
-func parseGoSumFile() (map[string]string, error) {
-	file, err := os.Open("go.sum")
+// import : []string{all related hashes}
+func parseGoSumFile(path string) (map[string][]string, error) {
+	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 
-	dependencies := make(map[string]string)
+	dependencies := make(map[string][]string)
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -164,7 +188,7 @@ func parseGoSumFile() (map[string]string, error) {
 		parts := strings.Fields(line)
 
 		if len(parts) == 3 {
-			dependencies[parts[0]] = parts[2]
+			dependencies[parts[0]] = append(dependencies[parts[0]], parts[2])
 		}
 	}
 
@@ -200,39 +224,23 @@ func loadPackageImports(file string) ([]string, error) {
 	return imports, nil
 }
 
-// getPackagePath returns the path to the go.sum file for a given import path
-func getPackagePath(importPath string) (string, error) {
-	cmd := exec.Command("go", "list", "-f", "{{.Dir}}", importPath)
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	err := cmd.Run()
-	if err != nil {
-		return "", err
-	}
-
-	// Trim the newline at the end of the output
-	path := strings.TrimSpace(out.String())
-
-	return filepath.Join(path, "go.sum"), nil
-}
-
 /*
-The saveHashToFile function takes two strings representing the root directory (root) from user input
+saveHashToFile function takes dir string
 and the target directory (dir), as well as a hash map (hash).
-It saves file at path {root}/mocks/{dir}/fake.lock.json
+It saves file at path mocks/{dir}/fake.lock.json
 */
-func saveHashToFile(root, dir string, hash map[string]FileHashData) error {
+func saveHashToFile(dir string, hash map[string]FileHashData) error {
 	data, err := json.Marshal(hash)
 	if err != nil {
 		return err
 	}
 
-	err = os.MkdirAll(filepath.Join(root, "mocks", dir), os.ModePerm)
+	err = os.MkdirAll(filepath.Join("mocks", dir), os.ModePerm)
 	if err != nil {
 		return err
 	}
 
-	os.WriteFile(filepath.Join(root, "mocks", dir, fileName), data, 0644)
+	os.WriteFile(filepath.Join("mocks", dir, fileName), data, 0644)
 
 	return nil
 }

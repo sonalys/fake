@@ -1,4 +1,4 @@
-package do_not_change
+package TestLoadPackageImports
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func sample() {
+func main() {
 	log.Printf("Hello, World!")
-	fmt.Printf("time is %v", time.Now())
+	fmt.Printf("Time: %v", time.Now())
 }
