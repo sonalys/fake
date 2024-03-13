@@ -11,6 +11,9 @@ image: build
 push:
 	@docker push ${IMG}
 
+test:
+	@go test ./...
+
 build_all:
 	@GOOS=windows GOARCH=amd64 go build -o ./bin/windows/amd64/fake.exe ${ENTRYPOINT}
 	@GOOS=linux GOARCH=amd64 go build -o ./bin/linux/amd64/fake ${ENTRYPOINT}
