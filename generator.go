@@ -28,10 +28,10 @@ func NewGenerator(n string) *Generator {
 	}
 }
 
-func (g *Generator) ParseFile(input string) *ParsedFile {
+func (g *Generator) ParseFile(input string) (*ParsedFile, error) {
 	file, err := parser.ParseFile(g.FileSet, input, nil, parser.ParseComments)
 	if err != nil {
-		panic(fmt.Sprintf("Error parsing file: %v\n", err))
+		return nil, err
 	}
 	pkgPath, _ := GetPackagePath(g.FileSet, input)
 	return &ParsedFile{
@@ -41,11 +41,14 @@ func (g *Generator) ParseFile(input string) *ParsedFile {
 		PkgName:     file.Name.Name,
 		Imports:     ParseImports(file.Imports),
 		UsedImports: make(map[string]struct{}),
-	}
+	}, nil
 }
 
 func (g *Generator) WriteFile(input, output string) bool {
-	parsedFile := g.ParseFile(input)
+	parsedFile, err := g.ParseFile(input)
+	if err != nil {
+		log.Panic().Msgf("failed to parse file: %s", input)
+	}
 	body := bytes.NewBuffer(make([]byte, 0, 2048))
 	header := bytes.NewBuffer(make([]byte, 0, 2048))
 

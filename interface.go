@@ -122,7 +122,10 @@ func (g *Generator) ParseInterface(ident *ast.SelectorExpr, usedImports map[stri
 	}
 	pkg := pkgs[0]
 	for _, file := range pkg.GoFiles {
-		parsed := g.ParseFile(file)
+		parsed, err := g.ParseFile(file)
+		if err != nil {
+			log.Fatal().Msgf("failed to parse file: %s", file)
+		}
 		i, importsInfo := parsed.FindInterfaceByName(pkgType)
 		if i == nil {
 			continue
