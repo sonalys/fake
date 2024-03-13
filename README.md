@@ -1,6 +1,6 @@
 # Fake
 
-Fake is a Go type-safe mocking library!
+Fake is a Go type-safe [mocking](https://en.wikipedia.org/wiki/Mock_object) generator.
 
 Automatically create type-safe mocks for any public interface.
 
