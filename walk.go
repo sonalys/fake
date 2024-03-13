@@ -19,7 +19,7 @@ func ListGoFiles(dirPath string, ignore []string) ([]string, error) {
 			}
 		}
 		// Check if the file has a ".go" extension
-		if strings.HasSuffix(info.Name(), ".go") && !strings.HasSuffix(info.Name(), "_test.go") {
+		if strings.HasSuffix(info.Name(), ".go") && !strings.HasSuffix(info.Name(), "_test.go") && !strings.HasSuffix(info.Name(), ".gen.go") {
 			goFiles = append(goFiles, filename)
 		}
 		return nil
