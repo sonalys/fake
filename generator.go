@@ -93,13 +93,9 @@ func FormatCode(in []byte) []byte {
 
 func Run(inputs []string, output string, ignore []string) {
 	gen := NewGenerator("mocks")
-	var filenames []string
-	for _, input := range inputs {
-		files, err := ListGoFiles(input, append(ignore, output))
-		if err != nil {
-			log.Fatal().Msgf("error listing files: %s", err)
-		}
-		filenames = append(filenames, files...)
+	filenames, err := ListGoFiles(inputs, append(ignore, output))
+	if err != nil {
+		log.Fatal().Msgf("error listing files: %s", err)
 	}
 	if len(filenames) == 0 {
 		log.Info().Msgf("no files found, nothing to be done")
