@@ -1,7 +1,7 @@
 package hashCheck
 
 import (
-	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"testing"
@@ -30,9 +30,7 @@ func TestCompareFileHashes(t *testing.T) {
 			t.Errorf("Expected nil but got %v", err)
 		}
 
-		if diff := cmp.Diff(output, expectedOutput); diff != "" {
-			t.Errorf("(-got +want)\n%s", diff)
-		}
+		require.Equal(t, expectedOutput, output)
 
 	})
 
@@ -50,9 +48,7 @@ func TestCompareFileHashes(t *testing.T) {
 
 		os.Remove(filepath.Join("mocks/test_data/TestCompareFileHashes/fake.lock.json"))
 
-		if diff := cmp.Diff(sliceToMap(output), sliceToMap(expectedOutput)); diff != "" {
-			t.Errorf("(-got +want)\n%s", diff)
-		}
+		require.Equal(t, expectedOutput, output)
 	})
 
 	t.Run("Should return whatever.go (if changed this file)", func(t *testing.T) {
@@ -67,9 +63,7 @@ func TestCompareFileHashes(t *testing.T) {
 			t.Errorf("Expected nil but got %v", err)
 		}
 
-		if diff := cmp.Diff(sliceToMap(output), sliceToMap(expectedOutput)); diff != "" {
-			t.Errorf("(-got +want)\n%s", diff)
-		}
+		require.Equal(t, expectedOutput, output)
 	})
 
 }
@@ -98,9 +92,7 @@ func TestGroupByDirectory(t *testing.T) {
 
 		output := groupByDirectory(inputs)
 
-		if diff := cmp.Diff(output, expectedOutput); diff != "" {
-			t.Errorf("(-got +want)\n%s", diff)
-		}
+		require.Equal(t, expectedOutput, output)
 	})
 
 	t.Run("Should return empty map when no inputs", func(t *testing.T) {
@@ -110,9 +102,7 @@ func TestGroupByDirectory(t *testing.T) {
 
 		output := groupByDirectory(inputs)
 
-		if diff := cmp.Diff(output, expectedOutput); diff != "" {
-			t.Errorf("(-got +want)\n%s", diff)
-		}
+		require.Equal(t, expectedOutput, output)
 	})
 
 	t.Run("Should handle files in root directory", func(t *testing.T) {
@@ -136,11 +126,9 @@ func TestGroupByDirectory(t *testing.T) {
 			},
 		}
 
-		actualOutputs := groupByDirectory(inputs)
+		output := groupByDirectory(inputs)
 
-		if diff := cmp.Diff(actualOutputs, expectedOutput); diff != "" {
-			t.Errorf("(-got +want)\n%s", diff)
-		}
+		require.Equal(t, expectedOutput, output)
 	})
 }
 
@@ -154,15 +142,13 @@ func TestParseJsonModel(t *testing.T) {
 			},
 		}
 
-		actualOutput, err := parseJsonModel(input)
+		output, err := parseJsonModel(input)
 
 		if err != nil {
 			t.Errorf("Expected nil but got %v", err)
 		}
 
-		if diff := cmp.Diff(actualOutput, expectedOutput); diff != "" {
-			t.Errorf("(-got +want)\n%s", diff)
-		}
+		require.Equal(t, expectedOutput, output)
 
 	})
 
@@ -185,9 +171,7 @@ func TestParseJsonModel(t *testing.T) {
 			t.Errorf("Expected nil but got %v", err)
 		}
 
-		if diff := cmp.Diff(output, expectedOutput); diff != "" {
-			t.Errorf("(-got +want)\n%s", diff)
-		}
+		require.Equal(t, expectedOutput, output)
 
 	})
 }
@@ -209,9 +193,7 @@ func TestParseGoSumFile(t *testing.T) {
 			t.Errorf("Expected nil but got %v", err)
 		}
 
-		if diff := cmp.Diff(output, expectedOutput); diff != "" {
-			t.Errorf("(-got +want)\n%s", diff)
-		}
+		require.Equal(t, expectedOutput, output)
 	})
 }
 
@@ -225,12 +207,7 @@ func TestLoadPackageImports(t *testing.T) {
 		if err != nil {
 			t.Errorf("Expected nil but got %v", err)
 		}
-
-		// cmp.Diff does not work with slices well, since it compares the order of the elements too
-
-		if diff := cmp.Diff(sliceToMap(output), sliceToMap(expectedOutput)); diff != "" {
-			t.Errorf("(-got +want)\n%s", diff)
-		}
+		require.Equal(t, sliceToMap(expectedOutput), sliceToMap(output))
 
 	})
 
@@ -257,25 +234,23 @@ func TestLoadPackageImports(t *testing.T) {
 
 		}
 
-		if diff := cmp.Diff(output, expectedOutput); diff != "" {
-			t.Errorf("(-got +want)\n%s", diff)
-		}
+		require.Equal(t, expectedOutput, output)
 
 	})
 }
 
 func TestSaveHashToFile(t *testing.T) {
 	t.Run("Should save JSON model to file in existing directory", func(t *testing.T) {
-		dir := "TestSaveHashToFile"
+		dir := t.TempDir()
 		t.TempDir()
-		hash := Hashes{
+		expectedOutput := Hashes{
 			"test.go": {
 				Hash:  "testhash",
 				GoSum: "testgosum",
 			},
 		}
 
-		err := saveHashToFile(dir, hash)
+		err := saveHashToFile(dir, expectedOutput)
 
 		if err != nil {
 			t.Errorf("Expected nil but got %v", err)
@@ -287,22 +262,20 @@ func TestSaveHashToFile(t *testing.T) {
 			t.Errorf("Expected nil but got %v", err)
 		}
 
-		if diff := cmp.Diff(output, hash); diff != "" {
-			t.Errorf("(-got +want)\n%s", diff)
-		}
+		require.Equal(t, expectedOutput, output)
 
 	})
 
 	t.Run("Should save JSON model to file in non existing directory", func(t *testing.T) {
-		dir := "TestSaveHashToFile/nonexistingdir"
-		hash := Hashes{
+		dir := t.TempDir()
+		expectedOutput := Hashes{
 			"test.go": {
 				Hash:  "testhash",
 				GoSum: "testgosum",
 			},
 		}
 
-		err := saveHashToFile(dir, hash)
+		err := saveHashToFile(dir, expectedOutput)
 
 		if err != nil {
 			t.Errorf("Expected nil but got %v", err)
@@ -314,11 +287,7 @@ func TestSaveHashToFile(t *testing.T) {
 			t.Errorf("Expected nil but got %v", err)
 		}
 
-		if diff := cmp.Diff(output, hash); diff != "" {
-			t.Errorf("(-got +want)\n%s", diff)
-		}
-
-		os.RemoveAll(filepath.Join(dir, "mocks", dir))
+		require.Equal(t, expectedOutput, output)
 
 	})
 }
@@ -334,8 +303,6 @@ func TestHashFiles(t *testing.T) {
 			t.Errorf("Expected nil but got %v", err)
 		}
 
-		if output != expectedOutput {
-			t.Errorf("Expected %v but got %v", expectedOutput, output)
-		}
+		require.Equal(t, expectedOutput, output)
 	})
 }
