@@ -51,7 +51,7 @@ func getRelativePath(path1, path2 string) (string, error) {
 
 // GetPackagePath returns the full package path from a given *ast.File.
 func GetPackagePath(fset *token.FileSet, filename string) (string, error) {
-	goModPath, err := findGoMod(filepath.Dir(filename))
+	goModPath, err := FindFile(filepath.Dir(filename), "go.mod")
 	if err != nil {
 		return "", err
 	}
@@ -71,22 +71,22 @@ func GetPackagePath(fset *token.FileSet, filename string) (string, error) {
 	return path.Join(modulePath, pkgPath), nil
 }
 
-// findGoMod searches for the go.mod file in the given directory and its parent directories.
-func findGoMod(dir string) (string, error) {
+// FindFile searches for the specified file in the given directory and its parent directories.
+func FindFile(childDir, filename string) (string, error) {
 	for {
-		goModPath := filepath.Join(dir, "go.mod")
-		if fileExists(goModPath) {
-			return goModPath, nil
+		filePath := filepath.Join(childDir, filename)
+		if fileExists(filePath) {
+			return filePath, nil
 		}
 
-		parentDir := filepath.Dir(dir)
-		if parentDir == dir {
+		parentDir := filepath.Dir(childDir)
+		if parentDir == childDir {
 			break
 		}
-		dir = parentDir
+		childDir = parentDir
 	}
 
-	return "", fmt.Errorf("go.mod file not found")
+	return "", fmt.Errorf("%s file not found", fileName)
 }
 
 // fileExists checks if a file exists at the given path.

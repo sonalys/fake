@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	fileName = "fake.lock.json"
+	lockFilename = "fake.lock.json"
 )
 
 func CompareFileHashes(inputDirs, ignore []string) ([]string, error) {
@@ -53,61 +53,57 @@ func CompareFileHashes(inputDirs, ignore []string) ([]string, error) {
 		return nil, fmt.Errorf("parseGoSumFile: %w", err)
 	}
 
-	for _, dir := range inputDirs {
+	files, err := fake.ListGoFiles(inputDirs, ignore)
+	if err != nil {
+		return nil, fmt.Errorf("getFiles: %w", err)
+	}
 
-		files, err := fake.ListGoFiles(dir, ignore)
+	groups := groupByDirectory(files)
+
+	for group, data := range groups {
+		model, err := parseJsonModel(group)
+
 		if err != nil {
-			return nil, fmt.Errorf("getFiles: %w", err)
+			return nil, fmt.Errorf("parseJsonModel: %w", err)
 		}
 
-		groups := groupByDirectory(files)
+		for _, file := range data {
 
-		for group, data := range groups {
-			model, err := parseJsonModel(group)
+			imports, err := loadPackageImports(file)
+
+			importHash := make([]string, len(imports))
 
 			if err != nil {
-				return nil, fmt.Errorf("parseJsonModel: %w", err)
+				return nil, fmt.Errorf("loadPackageImports: %w", err)
 			}
 
-			for _, file := range data {
-
-				imports, err := loadPackageImports(file)
-
-				importHash := make([]string, len(imports))
-
-				if err != nil {
-					return nil, fmt.Errorf("loadPackageImports: %w", err)
-				}
-
-				for _, importName := range imports {
-					importHash = append(importHash, dependencies[importName])
-				}
-
-				goSum, err := hashFiles(importHash...)
-				if err != nil {
-					return nil, fmt.Errorf("hashFiles: %w", err)
-				}
-
-				hash, err := hashFiles(file)
-				if err != nil {
-					return nil, fmt.Errorf("hashFiles: %w", err)
-				}
-
-				if model[file].Hash != hash || model[file].GoSum != goSum {
-					res = append(res, file)
-				}
-
-				model[file] = FileHashData{
-					Hash:  hash,
-					GoSum: goSum,
-				}
-
+			for _, importName := range imports {
+				importHash = append(importHash, dependencies[importName])
 			}
-			err = saveHashToFile(group, model)
+
+			goSum, err := hashFiles(importHash...)
 			if err != nil {
-				return nil, fmt.Errorf("saveHashToFile: %w", err)
+				return nil, fmt.Errorf("hashFiles: %w", err)
 			}
 
+			hash, err := hashFiles(file)
+			if err != nil {
+				return nil, fmt.Errorf("hashFiles: %w", err)
+			}
+
+			if model[file].Hash != hash || model[file].GoSum != goSum {
+				res = append(res, file)
+			}
+
+			model[file] = FileHashData{
+				Hash:  hash,
+				GoSum: goSum,
+			}
+
+		}
+		err = saveHashToFile(group, model)
+		if err != nil {
+			return nil, fmt.Errorf("saveHashToFile: %w", err)
 		}
 
 	}
@@ -155,7 +151,7 @@ func groupByDirectory(files []string) map[string][]string {
 // parseJsonModel reads and parses the json model from the fake.lock.json file
 // parses file from mocks/{path}/fake.lock.json
 func parseJsonModel(path string) (Hashes, error) {
-	data, err := os.ReadFile(filepath.Join("mocks", path, fileName))
+	data, err := os.ReadFile(filepath.Join("mocks", path, lockFilename))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return Hashes{}, nil
@@ -230,7 +226,7 @@ and the target directory (dir), as well as a hash map (hash).
 It saves file at path mocks/{dir}/fake.lock.json
 */
 func saveHashToFile(dir string, hash map[string]FileHashData) error {
-	data, err := json.Marshal(hash)
+	data, err := json.MarshalIndent(hash, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -240,7 +236,7 @@ func saveHashToFile(dir string, hash map[string]FileHashData) error {
 		return err
 	}
 
-	os.WriteFile(filepath.Join("mocks", dir, fileName), data, 0644)
+	os.WriteFile(filepath.Join("mocks", dir, lockFilename), data, 0644)
 
 	return nil
 }

@@ -267,6 +267,7 @@ func TestLoadPackageImports(t *testing.T) {
 func TestSaveHashToFile(t *testing.T) {
 	t.Run("Should save JSON model to file in existing directory", func(t *testing.T) {
 		dir := "TestSaveHashToFile"
+		t.TempDir()
 		hash := Hashes{
 			"test.go": {
 				Hash:  "testhash",
