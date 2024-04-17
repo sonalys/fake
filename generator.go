@@ -3,6 +3,8 @@ package fake
 import (
 	"bytes"
 	"fmt"
+	"github.com/sonalys/fake/hashCheck"
+	"github.com/sonalys/fake/internal/filewalk"
 	"go/format"
 	"go/parser"
 	"go/token"
@@ -72,7 +74,7 @@ func GetPackagePath(fset *token.FileSet, filename string) (string, error) {
 }
 
 // FindFile searches for the specified file in the given directory and its parent directories.
-func FindFile(childDir, filename string) (string, error) {
+func FindFile(childDir, fileName string) (string, error) {
 	for {
 		filePath := filepath.Join(childDir, filename)
 		if fileExists(filePath) {
@@ -168,20 +170,32 @@ func generateOutputFile(input, output string) *os.File {
 }
 
 func Run(inputs []string, output string, ignore []string) {
-	gen := NewGenerator("mocks")
-	var filenames []string
-	for _, input := range inputs {
-		files, err := ListGoFiles(input, append(ignore, output))
-		if err != nil {
-			log.Fatal().Msgf("error listing files: %s", err)
-		}
-		filenames = append(filenames, files...)
+	inputs, err := hashCheck.CompareFileHashes(inputs, output, ignore)
+
+	if err != nil {
+		log.Fatal().Err(err).Msg("Error comparing file hashes")
 	}
+
+	if len(inputs) == 0 {
+		log.Info().Msg("No files have changed")
+		return
+	}
+
+	log.Info().Msgf("Files to mock: %v", inputs)
+
+	gen := NewGenerator("mocks")
+	filenames, err := filewalk.ListGoFiles(inputs, append(ignore, output))
+	if err != nil {
+		log.Fatal().Msgf("error listing files: %s", err)
+	}
+
 	if len(filenames) == 0 {
 		log.Info().Msgf("no files found, nothing to be done")
 		return
 	}
+
 	log.Info().Msgf("scanning %d files", len(filenames))
+
 	for _, filename := range filenames {
 		pkg := path.Dir(filename)
 		pkg = strings.ReplaceAll(pkg, "internal", "internal_")

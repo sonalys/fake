@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/sonalys/fake/hashCheck"
 	"os"
 
 	"github.com/rs/zerolog"
@@ -39,19 +38,6 @@ func main() {
 		// Defaults to $CWD
 		input = []string{"."}
 	}
-
-	input, err := hashCheck.CompareFileHashes(input, ignore)
-
-	if err != nil {
-		log.Fatal().Err(err).Msg("Error comparing file hashes")
-	}
-
-	if len(input) == 0 {
-		log.Info().Msg("No files have changed")
-		return
-	}
-
-	log.Info().Msgf("Files to mock: %v", input)
 
 	mockgen.Run(input, *output, ignore)
 }

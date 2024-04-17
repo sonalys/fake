@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/sonalys/fake"
+	"github.com/sonalys/fake/internal/filewalk"
 	"golang.org/x/tools/go/packages"
 	"io"
 	"os"
@@ -19,7 +20,7 @@ const (
 	lockFilename = "fake.lock.json"
 )
 
-func CompareFileHashes(inputDirs, ignore []string) ([]string, error) {
+func CompareFileHashes(inputDirs []string, output string, ignore []string) ([]string, error) {
 	res := make([]string, 0)
 
 	dir, err := os.Getwd()
@@ -53,7 +54,7 @@ func CompareFileHashes(inputDirs, ignore []string) ([]string, error) {
 		return nil, fmt.Errorf("parseGoSumFile: %w", err)
 	}
 
-	files, err := fake.ListGoFiles(inputDirs, ignore)
+	files, err := filewalk.ListGoFiles(inputDirs, ignore)
 	if err != nil {
 		return nil, fmt.Errorf("getFiles: %w", err)
 	}
@@ -61,7 +62,7 @@ func CompareFileHashes(inputDirs, ignore []string) ([]string, error) {
 	groups := groupByDirectory(files)
 
 	for group, data := range groups {
-		model, err := parseJsonModel(group)
+		model, err := parseJsonModel(output, group)
 
 		if err != nil {
 			return nil, fmt.Errorf("parseJsonModel: %w", err)
@@ -101,7 +102,7 @@ func CompareFileHashes(inputDirs, ignore []string) ([]string, error) {
 			}
 
 		}
-		err = saveHashToFile(group, model)
+		err = saveHashToFile(group, output, model)
 		if err != nil {
 			return nil, fmt.Errorf("saveHashToFile: %w", err)
 		}
@@ -149,9 +150,9 @@ func groupByDirectory(files []string) map[string][]string {
 }
 
 // parseJsonModel reads and parses the json model from the fake.lock.json file
-// parses file from mocks/{path}/fake.lock.json
-func parseJsonModel(path string) (Hashes, error) {
-	data, err := os.ReadFile(filepath.Join("mocks", path, lockFilename))
+// parses file from output/{path}/fake.lock.json
+func parseJsonModel(output, path string) (Hashes, error) {
+	data, err := os.ReadFile(filepath.Join(output, path, lockFilename))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return Hashes{}, nil
@@ -223,20 +224,20 @@ func loadPackageImports(file string) ([]string, error) {
 /*
 saveHashToFile function takes dir string
 and the target directory (dir), as well as a hash map (hash).
-It saves file at path mocks/{dir}/fake.lock.json
+It saves file at path output/{dir}/fake.lock.json
 */
-func saveHashToFile(dir string, hash map[string]FileHashData) error {
+func saveHashToFile(dir, output string, hash map[string]FileHashData) error {
 	data, err := json.MarshalIndent(hash, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	err = os.MkdirAll(filepath.Join("mocks", dir), os.ModePerm)
+	err = os.MkdirAll(filepath.Join(output, dir), os.ModePerm)
 	if err != nil {
 		return err
 	}
 
-	os.WriteFile(filepath.Join("mocks", dir, lockFilename), data, 0644)
+	os.WriteFile(filepath.Join(output, dir, lockFilename), data, 0644)
 
 	return nil
 }
