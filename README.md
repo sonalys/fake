@@ -1,12 +1,14 @@
 # Fake
 
-Fake is a Go type-safe [mocking](https://en.wikipedia.org/wiki/Mock_object) generator.
+Fake is a Go type-safe [mocking](https://en.wikipedia.org/wiki/Mock_object) generator. It automatically creates type-safe mocks for any public interface.
 
-Automatically create type-safe mocks for any public interface.
+## Features
 
-Fake requires a `go module` and Go 1.22.
-
-It uses generics and static analysis for code generation.
+- Type-safe mock generation
+- Support for generics
+- Mock cache for ultra-fast mock regeneration
+- Function call configuration, with Repeatability and Optional calls
+- Automatic call assertion
 
 ## Installation
 
@@ -39,9 +41,8 @@ The flags are:
   -input    STRING    Folder to scan for interfaces, can be invoked multiple times
   -output   STRING    Output folder, it will follow a tree structure repeating the package path
   -ignore   STRING    Folder to ignore, can be invoked multiple times
-  
-```
 
+```
 
 ## Example
 
@@ -68,7 +69,7 @@ func (s *StubInterface[T]) Login(userID string) error
 ...
 ```
 
-So you can use it like this
+---
 
 ```go
 
@@ -82,8 +83,21 @@ func Test_Stub(t *testing.T) {
   config.Repeat(1) // Repeat 1 is default behavior.
   // or with .Maybe(), which won't fail tests it not called.
   config.Maybe()
-  
+
   var userDB UserDB = mock
   userDB.Login("userID") // Will call the previous function.
 }
 ```
+
+---
+
+## Contributors
+
+Any issues or improvements discussions are welcome! Feel free to contribute.
+Thank you for your collaboration!
+
+<a href="https://github.com/derailed/k9s/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=sonalys/fake" />
+</a>
+
+---
