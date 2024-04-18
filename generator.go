@@ -52,7 +52,7 @@ func generateOutputFile(input, output string) *os.File {
 	outputFile := path.Join(output, fmt.Sprintf("%s.gen.go", filename))
 	outFile, err := files.CreateFileAndFolders(outputFile)
 	if err != nil {
-		log.Panic().Msgf("Error creating mock file: %v\n", err)
+		log.Panic().Msgf("error creating mock file: %v\n", err)
 	}
 	return outFile
 }
@@ -99,27 +99,38 @@ func WriteHeader(w io.Writer, packageName string) {
 func FormatCode(in []byte) []byte {
 	out, err := format.Source(in)
 	if err != nil {
-		log.Panic().Msgf("Error formatting file: %v\n", err)
+		log.Panic().Msgf("error formatting file: %v\n", err)
 	}
 	return out
 }
 
 func Run(dirs []string, output string, ignore []string) {
 	gen := NewGenerator("mocks")
-	dirs, err := hashing.GetUpdatedFiles(dirs, append(ignore, output), output)
+	hashes, err := hashing.GetUncachedFiles(dirs, append(ignore, output), output)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Error comparing file hashes")
+		log.Fatal().Err(err).Msg("error comparing file hashes")
 	}
-	if len(dirs) == 0 {
-		log.Info().Msgf("no files found, nothing to be done")
+	if len(hashes) == 0 {
+		log.Info().Msgf("nothing to be done")
 		return
 	}
-	log.Info().Msgf("scanning %d files", len(dirs))
-	for _, dir := range dirs {
-		pkg := path.Dir(dir)
-		pkg = strings.ReplaceAll(pkg, "internal", "internal_")
-		out := path.Join(output, pkg)
-		gen.WriteFile(dir, out)
-		log.Info().Msgf("digesting %s to %s", dir, out)
+	for pkg, lockFiles := range hashes {
+		outDir := path.Join(output, pkg)
+		outDir = strings.ReplaceAll(outDir, "internal", "internal_")
+
+		var didAnything bool
+		for file, lockFile := range lockFiles {
+			if !lockFile.Changed() {
+				continue
+			}
+			if gen.WriteFile(path.Join(pkg, file), outDir) {
+				didAnything = true
+			}
+		}
+		if didAnything {
+			if err := hashing.WriteLockFile(outDir, lockFiles); err != nil {
+				log.Error().Err(err).Msg("error saving lock file")
+			}
+		}
 	}
 }

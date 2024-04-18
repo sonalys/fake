@@ -33,7 +33,7 @@ func (i *ParsedInterface) ListFields() []*ParsedField {
 // It cannot be a ParsedInterface method because we need to translate imports from the original file,
 // some interfaces are originated from external packages.
 func (g *Generator) ListInterfaceFields(i *ParsedInterface, imports map[string]*PackageInfo) []*ParsedField {
-	if i.Ref.Methods == nil {
+	if i == nil || i.Ref.Methods == nil {
 		return nil
 	}
 	var resp []*ParsedField
@@ -107,9 +107,13 @@ func (f *ParsedFile) FindInterfaceByName(name string) (*ParsedInterface, map[str
 func (g *Generator) ParseInterface(ident *ast.SelectorExpr, usedImports map[string]struct{}, imports map[string]*PackageInfo) *ParsedInterface {
 	// Packages can have different names than their path, Example: ctx "context" would return ctx.
 	pkgName := ident.X.(*ast.Ident).Name
+	pkgInfo, ok := imports[pkgName]
+	if !ok {
+		return nil
+	}
 	// Example: "Context" from context.Context.
 	pkgType := ident.Sel.Name
-	pkgPath := imports[pkgName].ImportPath
+	pkgPath := pkgInfo.ImportPath
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedFiles,
 	}
@@ -251,7 +255,7 @@ func (i *ParsedInterface) WriteStructMethods(file io.Writer) {
 }
 
 func (i *ParsedInterface) WriteMock(w io.Writer) {
-	log.Info().Msgf("generating mock for %s", i.Name)
+	log.Info().Msgf("generating mock for %s/%s", i.ParsedFile.PkgPath, i.Name)
 	i.WriteStruct(w)
 	i.WriteInitializer(w)
 	i.WriteAssertExpectations(w)

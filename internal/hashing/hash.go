@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"path"
+	"sort"
+	"strings"
 
 	"github.com/sonalys/fake/internal/files"
 	"golang.org/x/tools/go/packages"
@@ -17,55 +19,70 @@ const (
 	lockFilename = "fake.lock.json"
 )
 
-func GetUpdatedFiles(inputDirs, ignore []string, outputDir string) ([]string, error) {
-	res := make([]string, 0, len(inputDirs))
+func getImportsHash(filePath string, dependencies map[string]string) (string, error) {
+	imports, err := loadPackageImports(filePath)
+	if err != nil {
+		return "", fmt.Errorf("loading package imports: %w", err)
+	}
+	sort.Strings(imports)
+	var b strings.Builder
+	for _, importPath := range imports {
+		if hash, ok := dependencies[importPath]; ok {
+			b.WriteString(hash)
+		}
+	}
+	return b.String(), nil
+}
+
+func GetUncachedFiles(inputDirs, ignore []string, outputDir string) (map[string]map[string]LockfileHandler, error) {
 	dependencies, err := parseGoSum(inputDirs[0])
 	if err != nil {
 		return nil, fmt.Errorf("parsing go.sum file: %w", err)
 	}
 	goFiles, err := files.ListGoFiles(inputDirs, ignore)
 	if err != nil {
-		return nil, fmt.Errorf("getFiles: %w", err)
+		return nil, fmt.Errorf("listing *.go files: %w", err)
 	}
-	groups := files.GroupByDirectory(goFiles)
-	for group, data := range groups {
-		lockFile, err := readLockFile(path.Join(outputDir, group, lockFilename))
-		if err != nil {
-			return nil, fmt.Errorf("parseJsonModel: %w", err)
+	lockFiles := make(map[string]map[string]LockfileHandler, len(goFiles))
+	for dir, filePathList := range files.GroupByDirectory(goFiles) {
+		if _, ok := lockFiles[dir]; !ok {
+			lockFiles[dir] = make(map[string]LockfileHandler)
 		}
-		for _, file := range data {
-			imports, err := loadPackageImports(file)
-			importHash := make([]string, 0, len(imports))
-			if err != nil {
-				return nil, fmt.Errorf("loadPackageImports: %w", err)
-			}
-			for _, importName := range imports {
-				if importPath, ok := dependencies[importName]; ok {
-					importHash = append(importHash, importPath)
+		lockFilePath := path.Join(outputDir, dir, lockFilename)
+		lockFilePath = strings.ReplaceAll(lockFilePath, "internal", "internal_")
+		groupLockFiles, err := readLockFile(lockFilePath)
+		if err != nil {
+			return nil, fmt.Errorf("reading .fake.lock.json file: %w", err)
+		}
+		for _, filePath := range filePathList {
+			baseFilePath := path.Base(filePath)
+			entry, ok := groupLockFiles[baseFilePath]
+			if !ok {
+				lockFiles[dir][baseFilePath] = &UnhashedLockFile{
+					Filepath:     filePath,
+					Dependencies: dependencies,
 				}
-			}
-			goSum, err := hashFiles(importHash...)
-			if err != nil {
-				return nil, fmt.Errorf("hashFiles: %w", err)
-			}
-			hash, err := hashFiles(file)
-			if err != nil {
-				return nil, fmt.Errorf("hashFiles: %w", err)
-			}
-			if lockFile[file].Hash == hash && lockFile[file].GoSum == goSum {
 				continue
 			}
-			res = append(res, file)
-			lockFile[file] = FileLockData{
-				Hash:  hash,
-				GoSum: goSum,
+			importsHash, err := getImportsHash(filePath, dependencies)
+			if err != nil {
+				return nil, err
+			}
+			hash, err := hashFiles(filePath)
+			if err != nil {
+				return nil, fmt.Errorf("hashing file: %w", err)
+			}
+			if entry.Hash == hash && entry.Dependencies == importsHash {
+				continue
+			}
+			lockFiles[dir][baseFilePath] = &HashedLockFile{
+				Hash:         hash,
+				Dependencies: importsHash,
+				changed:      true,
 			}
 		}
-		if err = saveLockFiles(group, outputDir, lockFile); err != nil {
-			return nil, fmt.Errorf("saveHashToFile: %w", err)
-		}
 	}
-	return res, nil
+	return lockFiles, nil
 }
 
 // loadPackageImports returns a list of imports for a given .go file
@@ -76,9 +93,6 @@ func loadPackageImports(file string) ([]string, error) {
 	pkgs, err := packages.Load(cfg, file)
 	if err != nil {
 		return nil, err
-	}
-	if packages.PrintErrors(pkgs) > 0 {
-		return nil, errors.New("loaded packages contain errors")
 	}
 	var imports []string
 	for _, pkg := range pkgs {
@@ -91,7 +105,7 @@ func loadPackageImports(file string) ([]string, error) {
 
 // hashFiles returns the SHA256 hash of files
 func hashFiles(files ...string) (string, error) {
-	hasher := sha256.New()
+	var hasher = sha256.New()
 	for _, file := range files {
 		f, err := os.Open(file)
 		if err != nil {
