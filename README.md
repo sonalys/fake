@@ -96,7 +96,7 @@ func Test_Stub(t *testing.T) {
 Any issues or improvements discussions are welcome! Feel free to contribute.
 Thank you for your collaboration!
 
-<a href="https://github.com/derailed/k9s/graphs/contributors">
+<a href="https://github.com/sonalys/fake/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=sonalys/fake" />
 </a>
 
