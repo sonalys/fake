@@ -110,10 +110,7 @@ func Run(dirs []string, output string, ignore []string) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("error comparing file hashes")
 	}
-	if len(hashes) == 0 {
-		log.Info().Msgf("nothing to be done")
-		return
-	}
+	var counter int
 	for pkg, lockFiles := range hashes {
 		outDir := path.Join(output, pkg)
 		outDir = strings.ReplaceAll(outDir, "internal", "internal_")
@@ -125,6 +122,7 @@ func Run(dirs []string, output string, ignore []string) {
 			}
 			if gen.WriteFile(path.Join(pkg, file), outDir) {
 				didAnything = true
+				counter++
 			}
 		}
 		if didAnything {
@@ -132,5 +130,9 @@ func Run(dirs []string, output string, ignore []string) {
 				log.Error().Err(err).Msg("error saving lock file")
 			}
 		}
+	}
+	if counter == 0 {
+		log.Info().Msgf("nothing to be done")
+		return
 	}
 }
