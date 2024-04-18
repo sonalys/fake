@@ -7,10 +7,13 @@ import (
 	"go/parser"
 	"go/token"
 	"io"
+	"os"
 	"path"
 	"strings"
 
 	"github.com/rs/zerolog/log"
+	"github.com/sonalys/fake/hashCheck"
+	"github.com/sonalys/fake/internal/files"
 )
 
 // Generator is the controller for mock generation, holding cache for the targeted module.
@@ -33,7 +36,7 @@ func (g *Generator) ParseFile(input string) (*ParsedFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	pkgPath, _ := GetPackagePath(g.FileSet, input)
+	pkgPath, _ := files.GetPackagePath(g.FileSet, input)
 	return &ParsedFile{
 		Generator:   g,
 		Ref:         file,
@@ -42,6 +45,16 @@ func (g *Generator) ParseFile(input string) (*ParsedFile, error) {
 		Imports:     ParseImports(file.Imports),
 		UsedImports: make(map[string]struct{}),
 	}, nil
+}
+
+func generateOutputFile(input, output string) *os.File {
+	filename, _ := strings.CutSuffix(path.Base(input), ".go")
+	outputFile := path.Join(output, fmt.Sprintf("%s.gen.go", filename))
+	outFile, err := files.CreateFileAndFolders(outputFile)
+	if err != nil {
+		log.Panic().Msgf("Error creating mock file: %v\n", err)
+	}
+	return outFile
 }
 
 func (g *Generator) WriteFile(input, output string) bool {
@@ -91,22 +104,22 @@ func FormatCode(in []byte) []byte {
 	return out
 }
 
-func Run(inputs []string, output string, ignore []string) {
+func Run(dirs []string, output string, ignore []string) {
 	gen := NewGenerator("mocks")
-	filenames, err := ListGoFiles(inputs, append(ignore, output))
+	dirs, err := hashCheck.CompareFileHashes(dirs, append(ignore, output), output)
 	if err != nil {
-		log.Fatal().Msgf("error listing files: %s", err)
+		log.Fatal().Err(err).Msg("Error comparing file hashes")
 	}
-	if len(filenames) == 0 {
+	if len(dirs) == 0 {
 		log.Info().Msgf("no files found, nothing to be done")
 		return
 	}
-	log.Info().Msgf("scanning %d files", len(filenames))
-	for _, filename := range filenames {
-		pkg := path.Dir(filename)
+	log.Info().Msgf("scanning %d files", len(dirs))
+	for _, dir := range dirs {
+		pkg := path.Dir(dir)
 		pkg = strings.ReplaceAll(pkg, "internal", "internal_")
 		out := path.Join(output, pkg)
-		gen.WriteFile(filename, out)
-		log.Info().Msgf("digesting %s to %s", filename, out)
+		gen.WriteFile(dir, out)
+		log.Info().Msgf("digesting %s to %s", dir, out)
 	}
 }

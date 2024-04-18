@@ -5,8 +5,6 @@ import (
 	"go/ast"
 	"go/token"
 	"io"
-	"os"
-	"path/filepath"
 )
 
 type ParsedFile struct {
@@ -16,23 +14,6 @@ type ParsedFile struct {
 	PkgName     string
 	Imports     map[string]*PackageInfo
 	UsedImports map[string]struct{}
-}
-
-// CreateFileAndFolders creates a file and the necessary folders if they don't exist.
-func CreateFileAndFolders(filePath string) (*os.File, error) {
-	// Get the directory path from the file path
-	dir := filepath.Dir(filePath)
-	// Create directories if they don't exist
-	err := os.MkdirAll(dir, os.ModePerm)
-	if err != nil {
-		return nil, err
-	}
-	// Create the file
-	file, err := os.Create(filePath)
-	if err != nil {
-		return nil, err
-	}
-	return file, nil
 }
 
 func (f *ParsedFile) ListInterfaces() []*ParsedInterface {
