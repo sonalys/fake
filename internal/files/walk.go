@@ -120,3 +120,40 @@ func getRelativePath(path1, path2 string) (string, error) {
 	}
 	return relativePath, nil
 }
+
+/*
+GroupByDirectory groups files by their directory
+Example:
+
+Input:
+
+	files := []string{
+		"/home/user/documents/file1.txt",
+		"/home/user/documents/file2.txt",
+		"/home/user/images/image1.png",
+		"/home/user/images/image2.png",
+		"/home/user/images/image3.png",
+	}
+
+Output:
+
+		{
+		"/home/user/documents": []string{
+			"/home/user/documents/file1.txt",
+			"/home/user/documents/file2.txt",
+		},
+		"/home/user/images": []string{
+			"/home/user/images/image1.png",
+			"/home/user/images/image2.png",
+			"/home/user/images/image3.png",
+		},
+	}
+*/
+func GroupByDirectory(files []string) map[string][]string {
+	groups := make(map[string][]string)
+	for _, file := range files {
+		dir := filepath.Dir(file)
+		groups[dir] = append(groups[dir], file)
+	}
+	return groups
+}

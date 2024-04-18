@@ -12,8 +12,8 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog/log"
-	"github.com/sonalys/fake/hashCheck"
 	"github.com/sonalys/fake/internal/files"
+	"github.com/sonalys/fake/internal/hashing"
 )
 
 // Generator is the controller for mock generation, holding cache for the targeted module.
@@ -106,7 +106,7 @@ func FormatCode(in []byte) []byte {
 
 func Run(dirs []string, output string, ignore []string) {
 	gen := NewGenerator("mocks")
-	dirs, err := hashCheck.CompareFileHashes(dirs, append(ignore, output), output)
+	dirs, err := hashing.GetUpdatedFiles(dirs, append(ignore, output), output)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Error comparing file hashes")
 	}
