@@ -7,10 +7,13 @@ import (
 	"go/parser"
 	"go/token"
 	"io"
+	"os"
 	"path"
 	"strings"
 
 	"github.com/rs/zerolog/log"
+	"github.com/sonalys/fake/internal/files"
+	"github.com/sonalys/fake/internal/hashing"
 )
 
 // Generator is the controller for mock generation, holding cache for the targeted module.
@@ -33,7 +36,7 @@ func (g *Generator) ParseFile(input string) (*ParsedFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	pkgPath, _ := GetPackagePath(g.FileSet, input)
+	pkgPath, _ := files.GetPackagePath(g.FileSet, input)
 	return &ParsedFile{
 		Generator:   g,
 		Ref:         file,
@@ -42,6 +45,14 @@ func (g *Generator) ParseFile(input string) (*ParsedFile, error) {
 		Imports:     ParseImports(file.Imports),
 		UsedImports: make(map[string]struct{}),
 	}, nil
+}
+
+func generateOutputFile(input, output string) *os.File {
+	outFile, err := files.CreateFileAndFolders(files.GenerateOutputFileName(input, output))
+	if err != nil {
+		log.Panic().Msgf("error creating mock file: %v\n", err)
+	}
+	return outFile
 }
 
 func (g *Generator) WriteFile(input, output string) bool {
@@ -86,27 +97,36 @@ func WriteHeader(w io.Writer, packageName string) {
 func FormatCode(in []byte) []byte {
 	out, err := format.Source(in)
 	if err != nil {
-		log.Panic().Msgf("Error formatting file: %v\n", err)
+		log.Panic().Msgf("error formatting file: %v\n", err)
 	}
 	return out
 }
 
-func Run(inputs []string, output string, ignore []string) {
+func Run(dirs []string, output string, ignore []string) {
 	gen := NewGenerator("mocks")
-	filenames, err := ListGoFiles(inputs, append(ignore, output))
+	fileHashes, err := hashing.GetUncachedFiles(dirs, append(ignore, output), output)
 	if err != nil {
-		log.Fatal().Msgf("error listing files: %s", err)
+		log.Fatal().Err(err).Msg("error comparing file hashes")
 	}
-	if len(filenames) == 0 {
-		log.Info().Msgf("no files found, nothing to be done")
+	var counter int
+	for curFilePath, lockFile := range fileHashes {
+		outDir := path.Join(output, path.Dir(curFilePath))
+		outDir = strings.ReplaceAll(outDir, "internal", "internal_")
+		if !lockFile.Changed() {
+			continue
+		}
+		if gen.WriteFile(curFilePath, outDir) {
+			counter++
+		} else {
+			// Remove empty files from our new lock file.
+			delete(fileHashes, curFilePath)
+		}
+	}
+	if err := hashing.WriteLockFile(output, fileHashes); err != nil {
+		log.Error().Err(err).Msg("error saving lock file")
+	}
+	if counter == 0 {
+		log.Info().Msgf("nothing to be done")
 		return
-	}
-	log.Info().Msgf("scanning %d files", len(filenames))
-	for _, filename := range filenames {
-		pkg := path.Dir(filename)
-		pkg = strings.ReplaceAll(pkg, "internal", "internal_")
-		out := path.Join(output, pkg)
-		gen.WriteFile(filename, out)
-		log.Info().Msgf("digesting %s to %s", filename, out)
 	}
 }
