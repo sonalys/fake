@@ -15,9 +15,10 @@ type (
 
 	HashedLockFile struct {
 		Hash         string `json:"hash"`
-		Dependencies string `json:"dependencies"`
+		Dependencies string `json:"dependencies,omitempty"`
 		// Changed is used as an in-memory flag to say that a file lock changed.
 		changed bool `json:"-"`
+		exists  bool `json:"-"`
 	}
 
 	LockFilePackage map[string]HashedLockFile
@@ -25,10 +26,15 @@ type (
 
 type LockfileHandler interface {
 	Changed() bool
+	Exists() bool
 	Compute() HashedLockFile
 }
 
 func (f *UnhashedLockFile) Changed() bool {
+	return true
+}
+
+func (f *UnhashedLockFile) Exists() bool {
 	return true
 }
 
@@ -43,6 +49,10 @@ func (f *UnhashedLockFile) Compute() HashedLockFile {
 
 func (f *HashedLockFile) Changed() bool {
 	return f.changed
+}
+
+func (f *HashedLockFile) Exists() bool {
+	return f.exists
 }
 
 func (f *HashedLockFile) Compute() HashedLockFile {
@@ -72,7 +82,9 @@ It saves file at path output/{dir}/fake.lock.json
 func WriteLockFile(output string, hash map[string]LockfileHandler) error {
 	var out = make(map[string]HashedLockFile, len(hash))
 	for file, entry := range hash {
-		out[file] = entry.Compute()
+		if entry.Exists() {
+			out[file] = entry.Compute()
+		}
 	}
 	data, err := json.MarshalIndent(out, "", "\t")
 	if err != nil {

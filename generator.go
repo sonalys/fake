@@ -48,9 +48,7 @@ func (g *Generator) ParseFile(input string) (*ParsedFile, error) {
 }
 
 func generateOutputFile(input, output string) *os.File {
-	filename, _ := strings.CutSuffix(path.Base(input), ".go")
-	outputFile := path.Join(output, fmt.Sprintf("%s.gen.go", filename))
-	outFile, err := files.CreateFileAndFolders(outputFile)
+	outFile, err := files.CreateFileAndFolders(files.GenerateOutputFileName(input, output))
 	if err != nil {
 		log.Panic().Msgf("error creating mock file: %v\n", err)
 	}
@@ -106,30 +104,26 @@ func FormatCode(in []byte) []byte {
 
 func Run(dirs []string, output string, ignore []string) {
 	gen := NewGenerator("mocks")
-	hashes, err := hashing.GetUncachedFiles(dirs, append(ignore, output), output)
+	fileHashes, err := hashing.GetUncachedFiles(dirs, append(ignore, output), output)
 	if err != nil {
 		log.Fatal().Err(err).Msg("error comparing file hashes")
 	}
 	var counter int
-	for pkg, lockFiles := range hashes {
-		outDir := path.Join(output, pkg)
+	for curFilePath, lockFile := range fileHashes {
+		outDir := path.Join(output, path.Dir(curFilePath))
 		outDir = strings.ReplaceAll(outDir, "internal", "internal_")
-
-		var didAnything bool
-		for file, lockFile := range lockFiles {
-			if !lockFile.Changed() {
-				continue
-			}
-			if gen.WriteFile(path.Join(pkg, file), outDir) {
-				didAnything = true
-				counter++
-			}
+		if !lockFile.Changed() {
+			continue
 		}
-		if didAnything {
-			if err := hashing.WriteLockFile(outDir, lockFiles); err != nil {
-				log.Error().Err(err).Msg("error saving lock file")
-			}
+		if gen.WriteFile(curFilePath, outDir) {
+			counter++
+		} else {
+			// Remove empty files from our new lock file.
+			delete(fileHashes, curFilePath)
 		}
+	}
+	if err := hashing.WriteLockFile(output, fileHashes); err != nil {
+		log.Error().Err(err).Msg("error saving lock file")
 	}
 	if counter == 0 {
 		log.Info().Msgf("nothing to be done")
