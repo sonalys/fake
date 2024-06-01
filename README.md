@@ -9,6 +9,8 @@ Fake is a Go type-safe [mocking](https://en.wikipedia.org/wiki/Mock_object) gene
 - Mock cache for ultra-fast mock regeneration
 - Function call configuration, with Repeatability and Optional calls
 - Automatic call assertion
+- Caching, only regenerate updated interfaces
+- Automatic cleanup of generated mocks from removed code
 
 ## Installation
 
