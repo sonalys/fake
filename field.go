@@ -17,12 +17,12 @@ type ParsedField struct {
 func (f *ParsedField) digestMethodImports(funcType *ast.FuncType) {
 	if fields := funcType.Params; fields != nil {
 		for _, field := range fields.List {
-			f.Interface.ParsedFile.UsedImports[getAstTypeName(field.Type)] = struct{}{}
+			(*f.Interface.ParsedFile.UsedImports)[getAstTypeName(field.Type)] = struct{}{}
 		}
 	}
 	if fields := funcType.Results; fields != nil {
 		for _, field := range fields.List {
-			f.Interface.ParsedFile.UsedImports[getAstTypeName(field.Type)] = struct{}{}
+			(*f.Interface.ParsedFile.UsedImports)[getAstTypeName(field.Type)] = struct{}{}
 		}
 	}
 }
@@ -32,7 +32,7 @@ func (f *ParsedField) UpdateImports() {
 	case *ast.FuncType:
 		f.digestMethodImports(t)
 	case *ast.SelectorExpr:
-		f.Interface.ParsedFile.UsedImports[getAstTypeName(t.X)] = struct{}{}
+		(*f.Interface.ParsedFile.UsedImports)[getAstTypeName(t.X)] = struct{}{}
 	}
 }
 

@@ -43,7 +43,7 @@ func (g *Generator) ParseFile(input string) (*ParsedFile, error) {
 		PkgPath:     pkgPath,
 		PkgName:     file.Name.Name,
 		Imports:     ParseImports(file.Imports),
-		UsedImports: make(map[string]struct{}),
+		UsedImports: &map[string]struct{}{},
 	}, nil
 }
 

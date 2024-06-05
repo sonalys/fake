@@ -12,8 +12,8 @@ type ParsedFile struct {
 	Ref         *ast.File
 	PkgPath     string
 	PkgName     string
-	Imports     map[string]*PackageInfo
-	UsedImports map[string]struct{}
+	Imports     *map[string]*PackageInfo
+	UsedImports *map[string]struct{}
 }
 
 func (f *ParsedFile) ListInterfaces() []*ParsedInterface {
@@ -52,16 +52,16 @@ func (f *ParsedFile) WriteImports(w io.Writer) {
 	fmt.Fprintf(w, "\t\"fmt\"\n")
 	fmt.Fprintf(w, "\t\"testing\"\n")
 	fmt.Fprintf(w, "\tmockSetup \"github.com/sonalys/fake/boilerplate\"\n")
-	for name := range f.UsedImports {
-		info, ok := f.Imports[name]
+	for name := range *f.UsedImports {
+		info, ok := (*f.Imports)[name]
 		if !ok {
 			continue
 		}
-		if info.Name == name {
-			fmt.Fprintf(w, "\t\"%s\"\n", info.ImportPath)
+		if info.Alias == "" {
+			fmt.Fprintf(w, "\t\"%s\"\n", info.Path)
 			continue
 		}
-		fmt.Fprintf(w, "\t%s \"%s\"\n", name, info.ImportPath)
+		fmt.Fprintf(w, "\t%s \"%s\"\n", name, info.Path)
 	}
 	fmt.Fprintf(w, ")\n\n")
 }

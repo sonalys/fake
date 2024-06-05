@@ -32,7 +32,7 @@ func (i *ParsedInterface) ListFields() []*ParsedField {
 // ListInterfaceFields receives an interface to translate fields into fields.
 // It cannot be a ParsedInterface method because we need to translate imports from the original file,
 // some interfaces are originated from external packages.
-func (g *Generator) ListInterfaceFields(i *ParsedInterface, imports map[string]*PackageInfo) []*ParsedField {
+func (g *Generator) ListInterfaceFields(i *ParsedInterface, imports *map[string]*PackageInfo) []*ParsedField {
 	if i == nil || i.Ref.Methods == nil {
 		return nil
 	}
@@ -78,6 +78,17 @@ func (g *Generator) ListInterfaceFields(i *ParsedInterface, imports map[string]*
 			resp = append(resp, fields...)
 		}
 	}
+
+	// Deduplicate resp entries with the same name
+	nameMap := make(map[string]bool)
+	deduplicatedResp := []*ParsedField{}
+	for _, field := range resp {
+		if !nameMap[field.Name] {
+			deduplicatedResp = append(deduplicatedResp, field)
+			nameMap[field.Name] = true
+		}
+	}
+	resp = deduplicatedResp
 	return resp
 }
 
@@ -95,7 +106,7 @@ func (f *ParsedInterface) getTypeGenerics(t *ast.TypeSpec) ([]string, []string) 
 	return genericsTypes, genericsNames
 }
 
-func (f *ParsedFile) FindInterfaceByName(name string) (*ParsedInterface, map[string]*PackageInfo) {
+func (f *ParsedFile) FindInterfaceByName(name string) (*ParsedInterface, *map[string]*PackageInfo) {
 	for _, i := range f.ListInterfaces() {
 		if i.Name == name {
 			return i, f.Imports
@@ -104,16 +115,17 @@ func (f *ParsedFile) FindInterfaceByName(name string) (*ParsedInterface, map[str
 	return nil, nil
 }
 
-func (g *Generator) ParseInterface(ident *ast.SelectorExpr, usedImports map[string]struct{}, imports map[string]*PackageInfo) *ParsedInterface {
+func (g *Generator) ParseInterface(
+	ident *ast.SelectorExpr, usedImports *map[string]struct{}, imports *map[string]*PackageInfo) *ParsedInterface {
 	// Packages can have different names than their path, Example: ctx "context" would return ctx.
 	pkgName := ident.X.(*ast.Ident).Name
-	pkgInfo, ok := imports[pkgName]
+	pkgInfo, ok := (*imports)[pkgName]
 	if !ok {
 		return nil
 	}
 	// Example: "Context" from context.Context.
 	pkgType := ident.Sel.Name
-	pkgPath := pkgInfo.ImportPath
+	pkgPath := pkgInfo.Path
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedFiles,
 	}
@@ -134,9 +146,10 @@ func (g *Generator) ParseInterface(ident *ast.SelectorExpr, usedImports map[stri
 		if i == nil {
 			continue
 		}
-		for name, info := range importsInfo {
-			imports[name] = info
+		for name, info := range *importsInfo {
+			(*imports)[name] = info
 		}
+		parsed.Imports = imports
 		// Link the usedImports for the 2 files since we will be printing their ast.Type.
 		parsed.UsedImports = usedImports
 		return i

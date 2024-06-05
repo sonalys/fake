@@ -12,6 +12,7 @@ func (f *ParsedInterface) printAstExpr(expr ast.Expr) string {
 	// Extract package and type name
 	switch fieldType := expr.(type) {
 	case *ast.Ident:
+		// If the type name starts with a lowercase letter, it's an internal type.
 		if strings.ToLower(fieldType.Name[:1]) == fieldType.Name[:1] {
 			return fieldType.Name
 		}
@@ -24,24 +25,30 @@ func (f *ParsedInterface) printAstExpr(expr ast.Expr) string {
 				return fieldType.Name
 			}
 		}
-		collidedImport, collision := file.Imports[file.PkgName]
+		_, collision := (*file.UsedImports)[file.PkgName]
+		var alias string
 		if collision {
 			// If collision never happened, then rename interface package reference.
 			// If it already happened, then re-utilize the same name.
 			// Appending 1 to the end should be enough to avoid any collision at all.
-			if collidedImport.ImportPath != file.PkgPath {
+			if (*file.Imports)[file.PkgName].Path != file.PkgPath {
 				file.PkgName = fmt.Sprintf("%s1", file.PkgName)
+				alias = file.PkgName
+			} else {
+				return fmt.Sprintf("%s.%s", file.PkgName, fieldType.Name)
 			}
 		}
 		// If we have an object, that means we need to translate the type from mock package to current package.
-		file.Imports[file.PkgName] = &PackageInfo{
-			Name:       file.PkgName,
-			ImportPath: file.PkgPath,
+		(*file.Imports)[file.PkgName] = &PackageInfo{
+			Name:  file.PkgName,
+			Path:  file.PkgPath,
+			Alias: alias,
 		}
-		file.UsedImports[file.PkgName] = struct{}{}
+		(*file.UsedImports)[file.PkgName] = struct{}{}
 		return fmt.Sprintf("%s.%s", file.PkgName, fieldType.Name)
 	case *ast.SelectorExpr:
 		// Type from another package
+		(*file.UsedImports)[fmt.Sprint(fieldType.X)] = struct{}{}
 		return fmt.Sprintf("%s.%s", fieldType.X, fieldType.Sel)
 	case *ast.StarExpr:
 		return fmt.Sprintf("*%s", f.printAstExpr(fieldType.X))
