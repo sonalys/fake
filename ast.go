@@ -24,6 +24,15 @@ func (f *ParsedInterface) printAstExpr(expr ast.Expr) string {
 				return fieldType.Name
 			}
 		}
+		collidedImport, collision := file.Imports[file.PkgName]
+		if collision {
+			// If collision never happened, then rename interface package reference.
+			// If it already happened, then re-utilize the same name.
+			// Appending 1 to the end should be enough to avoid any collision at all.
+			if collidedImport.ImportPath != file.PkgPath {
+				file.PkgName = fmt.Sprintf("%s1", file.PkgName)
+			}
+		}
 		// If we have an object, that means we need to translate the type from mock package to current package.
 		file.Imports[file.PkgName] = &PackageInfo{
 			Name:       file.PkgName,
