@@ -18,7 +18,7 @@ Fake is a Go type-safe [mocking](https://en.wikipedia.org/wiki/Mock_object) gene
 
 Make sure `$GO_PATH/bin` is in your `$PATH`
 
-`go install github.com/sonalys/fake/entrypoints/fake@latest`
+`go install github.com/sonalys/fake/entrypoint/fake@latest`
 
 ### Release download
 
