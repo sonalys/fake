@@ -47,8 +47,10 @@ func (f *ParsedInterface) printAstExpr(expr ast.Expr) string {
 		(*file.UsedImports)[file.PkgName] = struct{}{}
 		return fmt.Sprintf("%s.%s", file.PkgName, fieldType.Name)
 	case *ast.SelectorExpr:
-		// Type from another package
-		(*file.UsedImports)[fmt.Sprint(fieldType.X)] = struct{}{}
+		// Type from another package. Should be on importList
+		// we need to mark as used.
+		importName := fmt.Sprint(fieldType.X)
+		(*file.UsedImports)[importName] = struct{}{}
 		return fmt.Sprintf("%s.%s", fieldType.X, fieldType.Sel)
 	case *ast.StarExpr:
 		return fmt.Sprintf("*%s", f.printAstExpr(fieldType.X))
