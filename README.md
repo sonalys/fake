@@ -75,7 +75,7 @@ func (s *StubInterface[T]) Login(userID string) error
 ...
 ```
 
-Granular generation with go:gen:
+Granular generation with go generate:
 
 ```go
 //go:generate fake -input FILENAME.go -interface Reader
@@ -85,6 +85,8 @@ type Reader interface {
 ```
 
 ---
+
+## Example usage for tests
 
 ```go
 
