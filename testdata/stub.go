@@ -1,12 +1,17 @@
 package stub
 
 import (
+	"io"
 	"testing"
 	"time"
 
 	"github.com/sonalys/fake/testdata/anotherpkg"
 	stub "github.com/stretchr/testify/require"
 )
+
+type Reader interface {
+	io.Reader
+}
 
 type LocalType struct{}
 
