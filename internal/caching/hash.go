@@ -1,4 +1,4 @@
-package hashing
+package caching
 
 import (
 	"crypto/sha256"
@@ -13,6 +13,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"github.com/sonalys/fake/internal/files"
+	"github.com/sonalys/fake/internal/gosum"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -36,7 +37,7 @@ func getImportsHash(filePath string, dependencies map[string]string) (string, er
 }
 
 func GetUncachedFiles(inputDirs, ignore []string, outputDir string) (map[string]LockfileHandler, error) {
-	dependencies, err := parseGoSum(inputDirs[0])
+	dependencies, err := gosum.Parse(inputDirs[0])
 	if err != nil {
 		return nil, fmt.Errorf("parsing go.sum file: %w", err)
 	}
