@@ -1,12 +1,35 @@
 package fake
 
 import (
+	"fmt"
 	"path"
 	"strings"
 
 	"github.com/rs/zerolog/log"
 	"github.com/sonalys/fake/internal/caching"
+	"github.com/sonalys/fake/internal/files"
 )
+
+type GenerateInterfaceConfig struct {
+	PackageName   string
+	Filename      string
+	InterfaceName string
+	OutputFolder  string
+}
+
+func GenerateInterface(c GenerateInterfaceConfig) {
+	gen := NewGenerator(c.PackageName)
+	b := gen.GenerateFile(c.Filename, c.OutputFolder, c.InterfaceName)
+	oldFilename := strings.TrimRight(path.Base(c.Filename), path.Ext(c.Filename))
+	filename := fmt.Sprintf("%s.%s.gen.go", oldFilename, c.InterfaceName)
+	outputFilename := path.Join(c.OutputFolder, filename)
+	outputFile, err := files.CreateFileAndFolders(outputFilename)
+	if err != nil {
+		log.Fatal().Err(err).Msgf("error opening file %s", outputFilename)
+	}
+	outputFile.Write(b)
+	outputFile.Close()
+}
 
 func Run(dirs []string, output string, ignore []string) {
 	gen := NewGenerator("mocks")
@@ -21,8 +44,11 @@ func Run(dirs []string, output string, ignore []string) {
 		if !lockFile.Changed() {
 			continue
 		}
-		if gen.WriteFile(curFilePath, outDir) {
+		if b := gen.GenerateFile(curFilePath, outDir); len(b) > 0 {
 			counter++
+			outputFile := openOutputFile(curFilePath, output)
+			outputFile.Write(b)
+			outputFile.Close()
 		} else {
 			// Remove empty files from our new lock file.
 			delete(fileHashes, curFilePath)

@@ -11,30 +11,42 @@ import (
 	"github.com/sonalys/fake/internal/files"
 )
 
-func (g *Generator) WriteFile(input, output string) bool {
+func (g *Generator) GenerateFile(input, output string, interfaceNames ...string) []byte {
 	parsedFile, err := g.ParseFile(input)
 	if err != nil {
 		log.Panic().Msgf("failed to parse file: %s", input)
 	}
 	interfaces := parsedFile.ListInterfaces()
 	if len(interfaces) == 0 {
-		return false
+		return nil
 	}
+	var selectedInterfaces []*ParsedInterface
+	if len(interfaceNames) > 0 {
+		for i := range interfaces {
+			for j := range interfaceNames {
+				if interfaces[i].Name == interfaceNames[j] {
+					selectedInterfaces = append(selectedInterfaces, interfaces[i])
+				}
+			}
+		}
+	} else {
+		selectedInterfaces = interfaces
+	}
+
 	header := bytes.NewBuffer(make([]byte, 0, parsedFile.Size))
 	body := bytes.NewBuffer(make([]byte, 0, parsedFile.Size))
+	if g.MockPackageName == "" {
+		g.MockPackageName = parsedFile.PkgName
+	}
 	writeHeader(header, g.MockPackageName)
 	// Iterate through the declarations in the file
-	for _, i := range interfaces {
+	for _, i := range selectedInterfaces {
 		i.write(body)
 	}
 	// writeImports comes after interfaces because we only add external dependencies after generating interfaces.
 	parsedFile.writeImports(header)
 	header.Write(body.Bytes())
-	b := formatCode(header.Bytes())
-	outputFile := openOutputFile(input, output)
-	defer outputFile.Close()
-	outputFile.Write(b)
-	return true
+	return formatCode(header.Bytes())
 }
 
 func writeHeader(w io.Writer, packageName string) {

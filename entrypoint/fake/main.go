@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -30,13 +31,32 @@ func (s *StrSlice) Set(value string) error {
 
 func main() {
 	var input, ignore StrSlice
+	var interfaceName, pkgName *string
 	flag.Var(&input, "input", "Folder to scan for .go files recursively")
 	output := flag.String("output", "mocks", "Folder to output the generated mocks")
 	flag.Var(&ignore, "ignore", "Specify which folders should be ignored")
+	interfaceName = flag.String("interface", "", "If you want to generate a single interface on the same folder, specify using this flag")
+	pkgName = flag.String("mockPackage", "", "Usable with -interface only. Provide if you want a different package from the interface being generated")
 	flag.Parse()
 	if len(input) == 0 {
 		// Defaults to $CWD
 		input = []string{"."}
+	}
+	if interfaceName != nil {
+		if len(input) == 0 {
+			log.Error().Msg("-input must be specified when using -interace")
+		}
+		if *output != "mocks" {
+			log.Error().Msgf("-output %s cannot be used when -interface is set", *output)
+			return
+		}
+		mockgen.GenerateInterface(mockgen.GenerateInterfaceConfig{
+			PackageName:   *pkgName,
+			Filename:      input[0],
+			InterfaceName: *interfaceName,
+			OutputFolder:  path.Dir(input[0]),
+		})
+		return
 	}
 	mockgen.Run(input, *output, ignore)
 }

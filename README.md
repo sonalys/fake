@@ -6,6 +6,7 @@ Fake is a Go type-safe [mocking](https://en.wikipedia.org/wiki/Mock_object) gene
 
 - Type-safe mock generation
 - Support for generics
+- Granular mock generation
 - Mock cache for ultra-fast mock regeneration
 - Function call configuration, with Repeatability and Optional calls
 - Automatic call assertion
@@ -40,13 +41,16 @@ Usage:
 
 The flags are:
 
-  -input    STRING    Folder to scan for interfaces, can be invoked multiple times
-  -output   STRING    Output folder, it will follow a tree structure repeating the package path
-  -ignore   STRING    Folder to ignore, can be invoked multiple times
+  -input        STRING    Folder to scan for interfaces, can be invoked multiple times
+  -output       STRING    Output folder, it will follow a tree structure repeating the package path
+  -ignore       STRING    Folder to ignore, can be invoked multiple times
+
+  -interface    STRING    Usually used with go:generate for granular mock generation for specific interfaces
+  -mockPackage  STRING    Used with -interface. Specify the package name of the generated mock
 
 ```
 
-## Example
+## Examples
 
 A very simple example would be:
 
@@ -69,6 +73,15 @@ type StubInterface struct {
 func (s *StubInterface[T]) OnLogin(funcs ...func(userID string) error) Config
 func (s *StubInterface[T]) Login(userID string) error
 ...
+```
+
+Granular generation with go:gen:
+
+```go
+//go:generate fake -input FILENAME.go -interface Reader
+type Reader interface {
+	io.Reader
+}
 ```
 
 ---
