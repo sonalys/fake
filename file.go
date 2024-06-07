@@ -5,15 +5,19 @@ import (
 	"go/ast"
 	"go/token"
 	"io"
+
+	"github.com/sonalys/fake/internal/imports"
 )
 
 type ParsedFile struct {
-	Generator   *Generator
-	Ref         *ast.File
-	PkgPath     string
-	PkgName     string
-	Imports     *map[string]*PackageInfo
-	UsedImports *map[string]struct{}
+	Generator       *Generator
+	Size            int
+	Ref             *ast.File
+	PkgPath         string
+	PkgName         string
+	Imports         map[string]imports.ImportEntry
+	OriginalImports map[string]imports.ImportEntry
+	ImportsPathMap  map[string]imports.ImportEntry
 }
 
 func (f *ParsedFile) ListInterfaces() []*ParsedInterface {
@@ -39,29 +43,25 @@ func (f *ParsedFile) ListInterfaces() []*ParsedInterface {
 				Ref:        interfaceType,
 				Name:       typeSpec.Name.Name,
 			}
-			cur.GenericsTypes, cur.GenericsNames = cur.GetGenericsInfo()
+			cur.GenericsTypes, cur.GenericsNames = cur.getGenericsInfo()
 			resp = append(resp, cur)
 		}
 	}
 	return resp
 }
 
-func (f *ParsedFile) WriteImports(w io.Writer) {
+func (f *ParsedFile) writeImports(w io.Writer) {
 	// Write import statements
 	fmt.Fprintf(w, "import (\n")
 	fmt.Fprintf(w, "\t\"fmt\"\n")
 	fmt.Fprintf(w, "\t\"testing\"\n")
 	fmt.Fprintf(w, "\tmockSetup \"github.com/sonalys/fake/boilerplate\"\n")
-	for name := range *f.UsedImports {
-		info, ok := (*f.Imports)[name]
-		if !ok {
-			continue
+	for _, info := range f.Imports {
+		fmt.Fprintf(w, "\t")
+		if info.Alias != "" {
+			fmt.Fprintf(w, "%s ", info.Alias)
 		}
-		if info.Alias == "" {
-			fmt.Fprintf(w, "\t\"%s\"\n", info.Path)
-			continue
-		}
-		fmt.Fprintf(w, "\t%s \"%s\"\n", name, info.Path)
+		fmt.Fprintf(w, "\"%s\"\n", info.Path)
 	}
 	fmt.Fprintf(w, ")\n\n")
 }

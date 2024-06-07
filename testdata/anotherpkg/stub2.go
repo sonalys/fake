@@ -1,9 +1,9 @@
 package anotherpkg
 
-import "context"
+import stub "context"
 
 type ExternalType int
 
 type ExternalInterface interface {
-	A(ExternalType) func(context.Context)
+	A(ExternalType) func(stub.Context)
 }
