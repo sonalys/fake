@@ -2,7 +2,6 @@ package files
 
 import (
 	"fmt"
-	"go/token"
 	"os"
 	"path"
 	"path/filepath"
@@ -78,8 +77,10 @@ func FindFile(childDir, fileName string) (string, error) {
 	return "", fmt.Errorf("%s file not found", fileName)
 }
 
-// GetPackagePath returns the full package path from a given *ast.File.
-func GetPackagePath(fset *token.FileSet, filename string) (string, error) {
+// GetPackagePath returns the absolute path of the file package, including the module path.
+// This function is not considering packages with different names from their respective folders,
+// the reason is that this software is not made for psychopaths.
+func GetPackagePath(filename string) (string, error) {
 	goModPath, err := FindFile(filepath.Dir(filename), "go.mod")
 	if err != nil {
 		return "", err
