@@ -4,7 +4,31 @@ import (
 	"fmt"
 	"go/ast"
 	"strings"
+
+	"github.com/sonalys/fake/internal/imports"
+	"github.com/sonalys/fake/internal/packages"
 )
+
+func (file *ParsedFile) importConflictResolution(importUsedName string, importPath string) string {
+	info, ok := file.OriginalImports[importUsedName]
+	// If the original import is found, use either name or alias.
+	if ok {
+		pkgInfo := file.ImportsPathMap[importPath]
+		if pkgInfo.Alias != "" {
+			return pkgInfo.Alias
+		}
+		return pkgInfo.Name
+	}
+	info = imports.ImportEntry{
+		PackageInfo: packages.PackageInfo{
+			Path: file.PkgPath,
+			Name: file.PkgName,
+		},
+	}
+	file.Imports[file.PkgName] = info
+	file.ImportsPathMap[file.PkgPath] = info
+	return file.PkgName
+}
 
 func (f *ParsedInterface) printAstExpr(expr ast.Expr) string {
 	file := f.ParsedFile
@@ -25,33 +49,22 @@ func (f *ParsedInterface) printAstExpr(expr ast.Expr) string {
 				return fieldType.Name
 			}
 		}
-		_, collision := (*file.UsedImports)[file.PkgName]
-		var alias string
-		if collision {
-			// If collision never happened, then rename interface package reference.
-			// If it already happened, then re-utilize the same name.
-			// Appending 1 to the end should be enough to avoid any collision at all.
-			if (*file.Imports)[file.PkgName].Path != file.PkgPath {
-				file.PkgName = fmt.Sprintf("%s1", file.PkgName)
-				alias = file.PkgName
-			} else {
-				return fmt.Sprintf("%s.%s", file.PkgName, fieldType.Name)
+		return fmt.Sprintf("%s.%s", file.importConflictResolution(file.PkgName, file.PkgPath), fieldType.Name)
+	case *ast.SelectorExpr:
+		// Type from another package.
+		pkgName := fmt.Sprint(fieldType.X)
+		if file.OriginalImports != nil {
+			pkgInfo, ok := file.OriginalImports[pkgName]
+			newPkgInfo := file.ImportsPathMap[pkgInfo.Path]
+			var pkgAlias = newPkgInfo.Name
+			if newPkgInfo.Alias != "" {
+				pkgAlias = newPkgInfo.Alias
+			}
+			if ok {
+				return fmt.Sprintf("%s.%s", pkgAlias, fieldType.Sel)
 			}
 		}
-		// If we have an object, that means we need to translate the type from mock package to current package.
-		(*file.Imports)[file.PkgName] = &PackageInfo{
-			Name:  file.PkgName,
-			Path:  file.PkgPath,
-			Alias: alias,
-		}
-		(*file.UsedImports)[file.PkgName] = struct{}{}
-		return fmt.Sprintf("%s.%s", file.PkgName, fieldType.Name)
-	case *ast.SelectorExpr:
-		// Type from another package. Should be on importList
-		// we need to mark as used.
-		importName := fmt.Sprint(fieldType.X)
-		(*file.UsedImports)[importName] = struct{}{}
-		return fmt.Sprintf("%s.%s", fieldType.X, fieldType.Sel)
+		return fmt.Sprintf("%s.%s", pkgName, fieldType.Sel)
 	case *ast.StarExpr:
 		return fmt.Sprintf("*%s", f.printAstExpr(fieldType.X))
 	case *ast.ArrayType:
@@ -83,7 +96,7 @@ func (f *ParsedInterface) printAstExpr(expr ast.Expr) string {
 		if fieldType.Methods.NumFields() == 0 {
 			return "interface{}"
 		}
-		methods := gen.ListInterfaceFields(&ParsedInterface{
+		methods := gen.listInterfaceFields(&ParsedInterface{
 			Ref: fieldType,
 		}, file.Imports)
 		b := &strings.Builder{}
