@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/token"
 	"io"
+	"slices"
 
 	"github.com/sonalys/fake/internal/imports"
 )
@@ -15,13 +16,13 @@ type ParsedFile struct {
 	Ref             *ast.File
 	PkgPath         string
 	PkgName         string
-	Imports         map[string]imports.ImportEntry
-	OriginalImports map[string]imports.ImportEntry
-	ImportsPathMap  map[string]imports.ImportEntry
+	Imports         map[string]*imports.ImportEntry
+	OriginalImports map[string]*imports.ImportEntry
+	ImportsPathMap  map[string]*imports.ImportEntry
 	UsedImports     map[string]struct{}
 }
 
-func (f *ParsedFile) ListInterfaces() []*ParsedInterface {
+func (f *ParsedFile) ListInterfaces(names ...string) []*ParsedInterface {
 	var resp []*ParsedInterface
 	// Iterate through the declarations in the file
 	for _, decl := range f.Ref.Decls {
@@ -31,7 +32,7 @@ func (f *ParsedFile) ListInterfaces() []*ParsedInterface {
 		}
 		for _, spec := range decl.Specs {
 			typeSpec, ok := spec.(*ast.TypeSpec)
-			if !ok {
+			if !ok || !slices.Contains(names, typeSpec.Name.Name) {
 				continue
 			}
 			interfaceType, ok := typeSpec.Type.(*ast.InterfaceType)

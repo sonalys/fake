@@ -12,28 +12,39 @@ import (
 
 type GenerateInterfaceConfig struct {
 	PackageName   string
-	Filename      string
+	Inputs        []string
 	InterfaceName string
 	OutputFolder  string
 }
 
 func GenerateInterface(c GenerateInterfaceConfig) {
-	gen := NewGenerator(c.PackageName)
-	b := gen.GenerateFile(c.Filename, c.OutputFolder, c.InterfaceName)
-	oldFilename := strings.TrimRight(path.Base(c.Filename), path.Ext(c.Filename))
-	filename := fmt.Sprintf("%s.%s.gen.go", oldFilename, c.InterfaceName)
-	outputFilename := path.Join(c.OutputFolder, filename)
-	outputFile, err := files.CreateFileAndFolders(outputFilename)
+	fileHashes, err := caching.GetUncachedFiles(c.Inputs, nil, "")
 	if err != nil {
-		log.Fatal().Err(err).Msgf("error opening file %s", outputFilename)
+		log.Fatal().Err(err).Msg("error comparing file hashes")
 	}
-	outputFile.Write(b)
-	outputFile.Close()
+	log.Info().Msgf("scanning %d files", len(fileHashes))
+	gen := NewGenerator(c.PackageName)
+	for curFilePath := range fileHashes {
+		b := gen.GenerateFile(curFilePath, c.OutputFolder, c.InterfaceName)
+		if b == nil {
+			continue
+		}
+		log.Info().Msgf("generating mock for %s:%s", curFilePath, c.InterfaceName)
+		oldFilename := strings.TrimRight(path.Base(curFilePath), path.Ext(curFilePath))
+		filename := fmt.Sprintf("%s.%s.gen.go", oldFilename, c.InterfaceName)
+		outputFilename := path.Join(c.OutputFolder, filename)
+		outputFile, err := files.CreateFileAndFolders(outputFilename)
+		if err != nil {
+			log.Fatal().Err(err).Msgf("error opening file %s", outputFilename)
+		}
+		outputFile.Write(b)
+		outputFile.Close()
+	}
 }
 
-func Run(dirs []string, output string, ignore []string) {
+func Run(inputs []string, output string, ignore []string, interfaces ...string) {
 	gen := NewGenerator("mocks")
-	fileHashes, err := caching.GetUncachedFiles(dirs, append(ignore, output), output)
+	fileHashes, err := caching.GetUncachedFiles(inputs, append(ignore, output), output)
 	if err != nil {
 		log.Fatal().Err(err).Msg("error comparing file hashes")
 	}

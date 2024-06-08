@@ -11,15 +11,15 @@ import (
 )
 
 // ListGoFiles lists all Go files under a directory.
-func ListGoFiles(paths, ignore []string) ([]string, error) {
+func ListGoFiles(dirs, ignore []string) ([]string, error) {
 	var goFiles []string
-	for _, path := range paths {
-		err := filepath.Walk(path, func(filename string, info os.FileInfo, err error) error {
+	for _, dir := range dirs {
+		err := filepath.Walk(dir, func(filename string, info os.FileInfo, err error) error {
 			if err != nil || info.IsDir() {
 				return nil
 			}
 			for _, entry := range ignore {
-				if _, ok := strings.CutPrefix(filename, entry); ok {
+				if matched, _ := path.Match(entry, dir); matched {
 					return nil
 				}
 			}

@@ -9,7 +9,7 @@ import (
 	stub "github.com/stretchr/testify/require"
 )
 
-//go:generate fake -input stub.go -interface Reader
+//go:generate fake -interface Reader
 type Reader interface {
 	io.Reader
 }

@@ -21,7 +21,7 @@ func (file *ParsedFile) importConflictResolution(importUsedName string, importPa
 		file.UsedImports[pkgInfo.Name] = struct{}{}
 		return pkgInfo.Name
 	}
-	info = imports.ImportEntry{
+	info = &imports.ImportEntry{
 		PackageInfo: packages.PackageInfo{
 			Path: file.PkgPath,
 			Name: file.PkgName,

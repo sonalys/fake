@@ -41,12 +41,12 @@ Usage:
 
 The flags are:
 
-  -input        STRING    Folder to scan for interfaces, can be invoked multiple times
-  -output       STRING    Output folder, it will follow a tree structure repeating the package path
-  -ignore       STRING    Folder to ignore, can be invoked multiple times
-
-  -interface    STRING    Usually used with go:generate for granular mock generation for specific interfaces
-  -mockPackage  STRING    Used with -interface. Specify the package name of the generated mock
+  FLAG          TYPE      DEFAULT   DESCRIPTION
+  -input        []STRING  .         Folder to scan for interfaces, can be invoked multiple times
+  -output       STRING    mocks     Output folder, it will follow a tree structure repeating the package path
+  -ignore       []STRING            Folder to ignore, can be invoked multiple times
+  -interface    []STRING            Usually used with go:generate for granular mock generation for specific interfaces
+  -mockPackage  STRING    mocks     Used with -interface. Specify the package name of the generated mock
 
 ```
 
@@ -78,7 +78,12 @@ func (s *StubInterface[T]) Login(userID string) error
 Granular generation with go generate:
 
 ```go
-//go:generate fake -input FILENAME.go -interface Reader
+//go:generate fake -interface Reader
+type Reader interface {
+	io.Reader
+}
+// or
+//go:generate go run github.com/sonalys/fake/entrypoint/fake -interface Reader
 type Reader interface {
 	io.Reader
 }

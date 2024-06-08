@@ -43,16 +43,13 @@ func main() {
 		input = []string{"."}
 	}
 	if interfaceName != nil {
-		if len(input) == 0 {
-			log.Error().Msg("-input must be specified when using -interace")
-		}
 		if *output != "mocks" {
 			log.Error().Msgf("-output %s cannot be used when -interface is set", *output)
 			return
 		}
 		mockgen.GenerateInterface(mockgen.GenerateInterfaceConfig{
 			PackageName:   *pkgName,
-			Filename:      input[0],
+			Inputs:        input,
 			InterfaceName: *interfaceName,
 			OutputFolder:  path.Dir(input[0]),
 		})

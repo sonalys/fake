@@ -16,23 +16,10 @@ func (g *Generator) GenerateFile(input, output string, interfaceNames ...string)
 	if err != nil {
 		log.Panic().Msgf("failed to parse file: %s", input)
 	}
-	interfaces := parsedFile.ListInterfaces()
+	interfaces := parsedFile.ListInterfaces(interfaceNames...)
 	if len(interfaces) == 0 {
 		return nil
 	}
-	var selectedInterfaces []*ParsedInterface
-	if len(interfaceNames) > 0 {
-		for i := range interfaces {
-			for j := range interfaceNames {
-				if interfaces[i].Name == interfaceNames[j] {
-					selectedInterfaces = append(selectedInterfaces, interfaces[i])
-				}
-			}
-		}
-	} else {
-		selectedInterfaces = interfaces
-	}
-
 	header := bytes.NewBuffer(make([]byte, 0, parsedFile.Size))
 	body := bytes.NewBuffer(make([]byte, 0, parsedFile.Size))
 	if g.MockPackageName == "" {
@@ -40,7 +27,7 @@ func (g *Generator) GenerateFile(input, output string, interfaceNames ...string)
 	}
 	writeHeader(header, g.MockPackageName)
 	// Iterate through the declarations in the file
-	for _, i := range selectedInterfaces {
+	for _, i := range interfaces {
 		i.write(body)
 	}
 	// writeImports comes after interfaces because we only add external dependencies after generating interfaces.

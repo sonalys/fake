@@ -14,7 +14,7 @@ type (
 	}
 )
 
-func FileListUsedImports(f *ast.File) (nameMap, pathMap map[string]ImportEntry) {
+func FileListUsedImports(f *ast.File) (nameMap, pathMap map[string]*ImportEntry) {
 	importNamePathMap := make(map[string]*ImportEntry, len(f.Imports))
 	for _, i := range f.Imports {
 		trimmedPath := strings.Trim(i.Path.Value, "\"")
@@ -35,11 +35,11 @@ func FileListUsedImports(f *ast.File) (nameMap, pathMap map[string]ImportEntry) 
 	}
 	// We want all imports used by interfaces.
 	importChecker := getUsedInterfacePackages(f)
-	nameMap = make(map[string]ImportEntry, len(importChecker))
-	pathMap = make(map[string]ImportEntry, len(importChecker))
+	nameMap = make(map[string]*ImportEntry, len(importChecker))
+	pathMap = make(map[string]*ImportEntry, len(importChecker))
 	for name := range importChecker {
-		nameMap[name] = *importNamePathMap[name]
-		pathMap[importNamePathMap[name].Path] = *importNamePathMap[name]
+		nameMap[name] = importNamePathMap[name]
+		pathMap[importNamePathMap[name].Path] = importNamePathMap[name]
 	}
 	return nameMap, pathMap
 }

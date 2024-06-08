@@ -33,7 +33,7 @@ func (i *ParsedInterface) ListFields() []*ParsedField {
 // ListInterfaceFields receives an interface to translate fields into fields.
 // It cannot be a ParsedInterface method because we need to translate imports from the original file,
 // some interfaces are originated from external packages.
-func (g *Generator) listInterfaceFields(i *ParsedInterface, imports map[string]imports.ImportEntry) []*ParsedField {
+func (g *Generator) listInterfaceFields(i *ParsedInterface, imports map[string]*imports.ImportEntry) []*ParsedField {
 	if i == nil || i.Ref.Methods == nil {
 		return nil
 	}
@@ -279,7 +279,6 @@ func (i *ParsedInterface) writeStructMethods(file io.Writer) {
 }
 
 func (i *ParsedInterface) write(w io.Writer) {
-	log.Info().Msgf("generating mock for %s/%s", i.ParsedFile.PkgPath, i.Name)
 	i.writeStruct(w)
 	i.writeInitializer(w)
 	i.writeAssertExpectations(w)

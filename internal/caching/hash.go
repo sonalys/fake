@@ -36,22 +36,27 @@ func getImportsHash(filePath string, dependencies map[string]string) (string, er
 	return b.String(), nil
 }
 
-func GetUncachedFiles(inputDirs, ignore []string, outputDir string) (map[string]LockfileHandler, error) {
-	dependencies, err := gosum.Parse(inputDirs[0])
-	if err != nil {
-		return nil, fmt.Errorf("parsing go.sum file: %w", err)
-	}
-	goFiles, err := files.ListGoFiles(inputDirs, ignore)
-	if err != nil {
-		return nil, fmt.Errorf("listing *.go files: %w", err)
-	}
+func GetUncachedFiles(inputs, ignore []string, outputDir string) (map[string]LockfileHandler, error) {
 	lockFilePath := path.Join(outputDir, lockFilename)
 	lockFilePath = strings.ReplaceAll(lockFilePath, "internal", "internal_")
 	groupLockFiles, err := readLockFile(lockFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("reading %s file: %w", lockFilename, err)
 	}
+	var dependencies map[string]string
+	if len(groupLockFiles) > 0 {
+		dependencies, err = gosum.Parse(inputs[0])
+		if err != nil {
+			return nil, fmt.Errorf("parsing go.sum file: %w", err)
+		}
+	}
+	goFiles, err := files.ListGoFiles(inputs, append(ignore, outputDir))
+	if err != nil {
+		return nil, fmt.Errorf("listing *.go files: %w", err)
+	}
 	out := make(map[string]LockfileHandler, len(groupLockFiles))
+
+	cachedHasher := getFileHasher(len(goFiles))
 	// TODO: split into a function.
 	for _, filePathList := range files.GroupByDirectory(goFiles) {
 		for _, filePath := range filePathList {
@@ -69,7 +74,7 @@ func GetUncachedFiles(inputDirs, ignore []string, outputDir string) (map[string]
 			if err != nil {
 				return nil, err
 			}
-			hash, err := hashFiles(filePath)
+			hash, err := cachedHasher(filePath)
 			if err != nil {
 				return nil, fmt.Errorf("hashing file: %w", err)
 			}
@@ -116,6 +121,32 @@ func loadPackageImports(file string) ([]string, error) {
 		}
 	}
 	return imports, nil
+}
+
+func getFileHasher(cacheSize int) func(...string) (string, error) {
+	cache := make(map[string]string, cacheSize)
+	return func(files ...string) (string, error) {
+		var hasher = sha256.New()
+		for _, file := range files {
+			if hash, hit := cache[file]; hit {
+				hasher.Write([]byte(hash))
+				continue
+			}
+			f, err := os.Open(file)
+			if err != nil {
+				if errors.Is(err, os.ErrNotExist) {
+					continue
+				}
+				return "", err
+			}
+			if _, err := io.Copy(hasher, f); err != nil {
+				f.Close()
+				return "", err
+			}
+			f.Close()
+		}
+		return hex.EncodeToString(hasher.Sum(nil)), nil
+	}
 }
 
 // hashFiles returns the SHA256 hash of files
