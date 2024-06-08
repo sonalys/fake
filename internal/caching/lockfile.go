@@ -5,6 +5,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+
+	"github.com/sonalys/fake/internal/files"
 )
 
 type (
@@ -90,7 +92,7 @@ func WriteLockFile(output string, hash map[string]LockfileHandler) error {
 	if err != nil {
 		return err
 	}
-	w, err := os.Create(filepath.Join(output, lockFilename))
+	w, err := files.CreateFileAndFolders(filepath.Join(output, lockFilename))
 	if err != nil {
 		return err
 	}

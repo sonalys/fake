@@ -32,7 +32,7 @@ func (f *ParsedFile) ListInterfaces(names ...string) []*ParsedInterface {
 		}
 		for _, spec := range decl.Specs {
 			typeSpec, ok := spec.(*ast.TypeSpec)
-			if !ok || !slices.Contains(names, typeSpec.Name.Name) {
+			if !ok || len(names) > 0 && !slices.Contains(names, typeSpec.Name.Name) {
 				continue
 			}
 			interfaceType, ok := typeSpec.Type.(*ast.InterfaceType)

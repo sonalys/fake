@@ -8,5 +8,6 @@ import (
 
 func GenerateOutputFileName(input, output string) string {
 	filename, _ := strings.CutSuffix(path.Base(input), ".go")
-	return path.Join(output, fmt.Sprintf("%s.gen.go", filename))
+	subTree := strings.ReplaceAll(path.Dir(input), "internal", "internal_")
+	return path.Join(output, subTree, fmt.Sprintf("%s.gen.go", filename))
 }

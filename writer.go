@@ -11,7 +11,7 @@ import (
 	"github.com/sonalys/fake/internal/files"
 )
 
-func (g *Generator) GenerateFile(input, output string, interfaceNames ...string) []byte {
+func (g *Generator) GenerateFile(input string, interfaceNames ...string) []byte {
 	parsedFile, err := g.ParseFile(input)
 	if err != nil {
 		log.Panic().Msgf("failed to parse file: %s", input)

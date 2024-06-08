@@ -95,9 +95,7 @@ func GetUncachedFiles(inputs, ignore []string, outputDir string) (map[string]Loc
 	for filePath := range groupLockFiles {
 		if _, ok := out[filePath]; !ok {
 			// Remove empty files from our new lock file.
-			outDir := path.Join(outputDir, path.Dir(filePath))
-			outDir = strings.ReplaceAll(outDir, "internal", "internal_")
-			rmFileName := files.GenerateOutputFileName(filePath, outDir)
+			rmFileName := files.GenerateOutputFileName(filePath, outputDir)
 			os.Remove(rmFileName)
 			log.Info().Msgf("removing legacy mock from %s", rmFileName)
 		}
