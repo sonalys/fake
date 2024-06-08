@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/sonalys/fake/internal/files"
@@ -18,9 +17,8 @@ type (
 	}
 
 	HashedLockFile struct {
-		ModifiedAt   time.Time `json:"modifiedAt,omitempty"`
-		Hash         string    `json:"hash"`
-		Dependencies string    `json:"dependencies,omitempty"`
+		Hash         string `json:"hash"`
+		Dependencies string `json:"dependencies,omitempty"`
 		// Changed is used as an in-memory flag to say that a file lock changed.
 		filepath string `json:"-"`
 		changed  bool   `json:"-"`

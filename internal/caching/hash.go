@@ -10,7 +10,6 @@ import (
 	"path"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/sonalys/fake/internal/files"
@@ -78,20 +77,6 @@ func GetUncachedFiles(inputs, ignore []string, outputDir string) (map[string]Loc
 			}
 			continue
 		}
-		var modAt time.Time
-		if !entry.ModifiedAt.IsZero() {
-			stat, err := os.Stat(absPath)
-			if err != nil {
-				return nil, fmt.Errorf("could not get file stats: %w", err)
-			}
-			modAt := stat.ModTime()
-			if !stat.ModTime().IsZero() && modAt.Equal(entry.ModifiedAt) {
-				entry.exists = true
-				entry.filepath = absPath
-				out[relPath] = &entry
-				continue
-			}
-		}
 		importsHash, err := getImportsHash(absPath, dependencies)
 		if err != nil {
 			return nil, err
@@ -113,7 +98,6 @@ func GetUncachedFiles(inputs, ignore []string, outputDir string) (map[string]Loc
 			Hash:         hash,
 			filepath:     absPath,
 			Dependencies: importsHash,
-			ModifiedAt:   modAt,
 		}
 	}
 	for relPath := range groupLockFiles {
