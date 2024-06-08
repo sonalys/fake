@@ -23,7 +23,10 @@ func GenerateInterface(c GenerateInterfaceConfig) {
 		log.Fatal().Err(err).Msg("error comparing file hashes")
 	}
 	log.Info().Msgf("scanning %d files for interface %s", len(fileHashes), c.InterfaceName)
-	gen := NewGenerator(c.PackageName)
+	gen, err := NewGenerator(c.PackageName, c.Inputs[0])
+	if err != nil {
+		log.Fatal().Err(err).Msg("error creating mock generator")
+	}
 	for curFilePath := range fileHashes {
 		b := gen.GenerateFile(curFilePath, c.InterfaceName)
 		if b == nil {
@@ -40,29 +43,34 @@ func GenerateInterface(c GenerateInterfaceConfig) {
 		outputFile.Write(b)
 		outputFile.Close()
 	}
+	if err := caching.WriteLockFile(path.Dir(gen.goModFilename), fileHashes); err != nil {
+		log.Error().Err(err).Msg("error saving lock file")
+	}
 }
 
 func Run(inputs []string, output string, ignore []string, interfaces ...string) {
-	gen := NewGenerator("mocks")
+	gen, err := NewGenerator("mocks", inputs[0])
+	if err != nil {
+		log.Fatal().Err(err).Msg("error creating mock generator")
+	}
 	fileHashes, err := caching.GetUncachedFiles(inputs, append(ignore, output), output)
 	if err != nil {
 		log.Fatal().Err(err).Msg("error comparing file hashes")
 	}
-	log.Info().Msgf("scanning %d files", len(fileHashes))
 	var counter int
-	for curFilePath, lockFile := range fileHashes {
+	for relPath, lockFile := range fileHashes {
 		if !lockFile.Changed() {
 			continue
 		}
-		if b := gen.GenerateFile(curFilePath); len(b) > 0 {
-			log.Info().Msgf("generating mock for %s", curFilePath)
+		if b := gen.GenerateFile(lockFile.AbsolutePath()); len(b) > 0 {
+			log.Info().Msgf("generating mock for %s", relPath)
 			counter++
-			outputFile := openOutputFile(curFilePath, output)
+			outputFile := openOutputFile(relPath, output)
 			outputFile.Write(b)
 			outputFile.Close()
 		} else {
 			// Remove empty files from our new lock file.
-			delete(fileHashes, curFilePath)
+			// delete(fileHashes, relPath)
 		}
 	}
 	if len(fileHashes) == 0 || counter == 0 {

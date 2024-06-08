@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	"github.com/sonalys/fake/internal/files"
 )
 
@@ -21,8 +22,9 @@ type (
 		Hash         string    `json:"hash"`
 		Dependencies string    `json:"dependencies,omitempty"`
 		// Changed is used as an in-memory flag to say that a file lock changed.
-		changed bool `json:"-"`
-		exists  bool `json:"-"`
+		filepath string `json:"-"`
+		changed  bool   `json:"-"`
+		exists   bool   `json:"-"`
 	}
 
 	LockFilePackage map[string]HashedLockFile
@@ -30,22 +32,37 @@ type (
 
 type LockfileHandler interface {
 	Changed() bool
+	AbsolutePath() string
 	Exists() bool
-	Compute() HashedLockFile
+	Compute() *HashedLockFile
 }
 
 func (f *UnhashedLockFile) Changed() bool {
 	return true
 }
 
+func (f *UnhashedLockFile) AbsolutePath() string {
+	return f.Filepath
+}
+
+func (f *HashedLockFile) AbsolutePath() string {
+	return f.filepath
+}
+
 func (f *UnhashedLockFile) Exists() bool {
 	return true
 }
 
-func (f *UnhashedLockFile) Compute() HashedLockFile {
-	hash, _ := hashFiles(f.Filepath)
-	dep, _ := getImportsHash(f.Filepath, f.Dependencies)
-	return HashedLockFile{
+func (f *UnhashedLockFile) Compute() *HashedLockFile {
+	hash, err := hashFiles(f.Filepath)
+	if err != nil {
+		log.Error().Err(err).Msg("could not compute file hash")
+	}
+	dep, err := getImportsHash(f.Filepath, f.Dependencies)
+	if err != nil {
+		log.Error().Err(err).Msg("could not compute file imports hash")
+	}
+	return &HashedLockFile{
 		Hash:         hash,
 		Dependencies: dep,
 	}
@@ -59,8 +76,8 @@ func (f *HashedLockFile) Exists() bool {
 	return f.exists
 }
 
-func (f *HashedLockFile) Compute() HashedLockFile {
-	return *f
+func (f *HashedLockFile) Compute() *HashedLockFile {
+	return f
 }
 
 // readLockFile reads and parses the json model from the fake.lock.json file
@@ -84,7 +101,7 @@ and the target directory (dir), as well as a hash map (hash).
 It saves file at path output/{dir}/fake.lock.json
 */
 func WriteLockFile(output string, hash map[string]LockfileHandler) error {
-	var out = make(map[string]HashedLockFile, len(hash))
+	var out = make(map[string]*HashedLockFile, len(hash))
 	for file, entry := range hash {
 		if entry.Exists() {
 			out[file] = entry.Compute()

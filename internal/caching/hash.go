@@ -10,6 +10,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/sonalys/fake/internal/files"
@@ -29,8 +30,11 @@ func getImportsHash(filePath string, dependencies map[string]string) (string, er
 	sort.Strings(imports)
 	var b strings.Builder
 	for _, importPath := range imports {
-		if hash, ok := dependencies[importPath]; ok {
-			b.WriteString(hash)
+		for path, hash := range dependencies {
+			if strings.Contains(importPath, path) {
+				b.WriteString(hash)
+				break
+			}
 		}
 	}
 	return b.String(), nil
@@ -38,17 +42,13 @@ func getImportsHash(filePath string, dependencies map[string]string) (string, er
 
 func GetUncachedFiles(inputs, ignore []string, outputDir string) (map[string]LockfileHandler, error) {
 	lockFilePath := path.Join(outputDir, lockFilename)
-	lockFilePath = strings.ReplaceAll(lockFilePath, "internal", "internal_")
 	groupLockFiles, err := readLockFile(lockFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("reading %s file: %w", lockFilename, err)
 	}
-	var dependencies map[string]string
-	if len(groupLockFiles) > 0 {
-		dependencies, err = gosum.Parse(inputs[0])
-		if err != nil {
-			return nil, fmt.Errorf("parsing go.sum file: %w", err)
-		}
+	dependencies, err := gosum.Parse(inputs[0])
+	if err != nil {
+		return nil, fmt.Errorf("parsing go.sum file: %w", err)
 	}
 	goFiles, err := files.ListGoFiles(inputs, append(ignore, outputDir))
 	if err != nil {
@@ -57,52 +57,69 @@ func GetUncachedFiles(inputs, ignore []string, outputDir string) (map[string]Loc
 	out := make(map[string]LockfileHandler, len(groupLockFiles))
 
 	cachedHasher := getFileHasher(len(goFiles))
-	// TODO: split into a function.
-	for _, filePathList := range files.GroupByDirectory(goFiles) {
-		for _, filePath := range filePathList {
-			entry, ok := groupLockFiles[filePath]
-			// If file is not in lock file hashes, then we delay hash calculation for after the mock generation.
-			// this makes it faster by avoiding calculation of useless files.
-			if !ok {
-				out[filePath] = &UnhashedLockFile{
-					Filepath:     filePath,
-					Dependencies: dependencies,
-				}
-				continue
+
+	gomod, err := files.FindFile(inputs[0], "go.mod")
+	if err != nil {
+		return nil, fmt.Errorf("input is not part of a go module")
+	}
+
+	for _, absPath := range goFiles {
+		relPath, err := files.GetRelativePath(gomod, absPath)
+		if err != nil {
+			return nil, err
+		}
+		entry, ok := groupLockFiles[relPath]
+		// If file is not in lock file hashes, then we delay hash calculation for after the mock generation.
+		// this makes it faster by avoiding calculation of useless files.
+		if !ok {
+			out[relPath] = &UnhashedLockFile{
+				Filepath:     absPath,
+				Dependencies: dependencies,
 			}
-			stat, _ := os.Stat(filePath)
-			if !entry.ModifiedAt.IsZero() && !stat.ModTime().IsZero() && stat.ModTime().Equal(entry.ModifiedAt) {
-				entry.exists = true
-				out[filePath] = &entry
-				continue
-			}
-			importsHash, err := getImportsHash(filePath, dependencies)
+			continue
+		}
+		var modAt time.Time
+		if !entry.ModifiedAt.IsZero() {
+			stat, err := os.Stat(absPath)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("could not get file stats: %w", err)
 			}
-			hash, err := cachedHasher(filePath)
-			if err != nil {
-				return nil, fmt.Errorf("hashing file: %w", err)
-			}
-			if entry.Hash == hash && entry.Dependencies == importsHash {
-				// Mark file as processed, to further delete unused entries.
+			modAt := stat.ModTime()
+			if !stat.ModTime().IsZero() && modAt.Equal(entry.ModifiedAt) {
 				entry.exists = true
-				out[filePath] = &entry
+				entry.filepath = absPath
+				out[relPath] = &entry
 				continue
-			}
-			out[filePath] = &HashedLockFile{
-				changed:      true,
-				exists:       true,
-				Hash:         hash,
-				Dependencies: importsHash,
-				ModifiedAt:   stat.ModTime(),
 			}
 		}
+		importsHash, err := getImportsHash(absPath, dependencies)
+		if err != nil {
+			return nil, err
+		}
+		hash, err := cachedHasher(absPath)
+		if err != nil {
+			return nil, fmt.Errorf("hashing file: %w", err)
+		}
+		if entry.Hash == hash && entry.Dependencies == importsHash {
+			// Mark file as processed, to further delete unused entries.
+			entry.exists = true
+			entry.filepath = absPath
+			out[relPath] = &entry
+			continue
+		}
+		out[relPath] = &HashedLockFile{
+			changed:      true,
+			exists:       true,
+			Hash:         hash,
+			filepath:     absPath,
+			Dependencies: importsHash,
+			ModifiedAt:   modAt,
+		}
 	}
-	for filePath := range groupLockFiles {
-		if _, ok := out[filePath]; !ok {
+	for relPath := range groupLockFiles {
+		if _, ok := out[relPath]; !ok {
 			// Remove empty files from our new lock file.
-			rmFileName := files.GenerateOutputFileName(filePath, outputDir)
+			rmFileName := files.GenerateOutputFileName(relPath, outputDir)
 			os.Remove(rmFileName)
 			log.Info().Msgf("removing legacy mock from %s", rmFileName)
 		}
@@ -119,7 +136,7 @@ func loadPackageImports(file string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	var imports []string
+	imports := make([]string, 0, 30)
 	for _, pkg := range pkgs {
 		for imp := range pkg.Imports {
 			imports = append(imports, imp)

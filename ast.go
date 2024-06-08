@@ -9,28 +9,29 @@ import (
 	"github.com/sonalys/fake/internal/packages"
 )
 
-func (file *ParsedFile) importConflictResolution(importUsedName string, importPath string) string {
-	info, ok := file.OriginalImports[importUsedName]
-	// If the original import is found, use either name or alias.
-	if ok {
-		pkgInfo := file.ImportsPathMap[importPath]
-		if pkgInfo.Alias != "" {
-			file.UsedImports[pkgInfo.Alias] = struct{}{}
-			return pkgInfo.Alias
-		}
-		file.UsedImports[pkgInfo.Name] = struct{}{}
-		return pkgInfo.Name
+func (file *ParsedFile) importConflictResolution() string {
+	if file.importResolved {
+		return file.importAlias
+	}
+	var alias string = file.PkgName
+	info, ok := file.Imports[file.PkgName]
+	// Conflict detected for a package with different path.
+	if ok && info.Path != file.PkgPath {
+		alias = fmt.Sprintf("%s1", alias)
 	}
 	info = &imports.ImportEntry{
-		PackageInfo: packages.PackageInfo{
+		PackageInfo: &packages.PackageInfo{
 			Path: file.PkgPath,
 			Name: file.PkgName,
 		},
+		Alias: alias,
 	}
-	file.Imports[file.PkgName] = info
+	file.Imports[alias] = info
 	file.ImportsPathMap[file.PkgPath] = info
-	file.UsedImports[file.PkgName] = struct{}{}
-	return file.PkgName
+	file.UsedImports[alias] = struct{}{}
+	file.importAlias = alias
+	file.importResolved = true
+	return alias
 }
 
 func (f *ParsedInterface) printAstExpr(expr ast.Expr) string {
@@ -52,7 +53,7 @@ func (f *ParsedInterface) printAstExpr(expr ast.Expr) string {
 				return fieldType.Name
 			}
 		}
-		return fmt.Sprintf("%s.%s", file.importConflictResolution(file.PkgName, file.PkgPath), fieldType.Name)
+		return fmt.Sprintf("%s.%s", file.importConflictResolution(), fieldType.Name)
 	case *ast.SelectorExpr:
 		// Type from another package.
 		pkgName := fmt.Sprint(fieldType.X)

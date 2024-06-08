@@ -7,6 +7,7 @@ import (
 	"io"
 	"slices"
 
+	"github.com/rs/zerolog/log"
 	"github.com/sonalys/fake/internal/imports"
 )
 
@@ -20,6 +21,9 @@ type ParsedFile struct {
 	OriginalImports map[string]*imports.ImportEntry
 	ImportsPathMap  map[string]*imports.ImportEntry
 	UsedImports     map[string]struct{}
+
+	importResolved bool
+	importAlias    string
 }
 
 func (f *ParsedFile) ListInterfaces(names ...string) []*ParsedInterface {
@@ -59,9 +63,12 @@ func (f *ParsedFile) writeImports(w io.Writer) {
 	fmt.Fprintf(w, "\t\"testing\"\n")
 	fmt.Fprintf(w, "\tmockSetup \"github.com/sonalys/fake/boilerplate\"\n")
 	for name := range f.UsedImports {
-		info := f.Imports[name]
+		info, ok := f.Imports[name]
+		if !ok {
+			log.Fatal().Msg("inconsistency between usedImports and imports state")
+		}
 		fmt.Fprintf(w, "\t")
-		if info.Alias != "" {
+		if info.Alias != "" && info.Alias != info.PackageInfo.Name {
 			fmt.Fprintf(w, "%s ", info.Alias)
 		}
 		fmt.Fprintf(w, "\"%s\"\n", info.Path)

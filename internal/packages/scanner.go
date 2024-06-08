@@ -9,9 +9,10 @@ type PackageInfo struct {
 }
 
 // Parse parses the specified package and returns its package name and import path.
-func Parse(importPath string) (*PackageInfo, bool) {
+func Parse(dir, importPath string) (*PackageInfo, bool) {
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedFiles,
+		Dir:  dir,
 	}
 	pkgs, err := packages.Load(cfg, importPath)
 	if err != nil {

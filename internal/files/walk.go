@@ -80,31 +80,20 @@ func FindFile(childDir, fileName string) (string, error) {
 // GetPackagePath returns the absolute path of the file package, including the module path.
 // This function is not considering packages with different names from their respective folders,
 // the reason is that this software is not made for psychopaths.
-func GetPackagePath(filename string) (string, error) {
-	goModPath, err := FindFile(filepath.Dir(filename), "go.mod")
-	if err != nil {
-		return "", err
-	}
-	// Read the contents of the go.mod file
-	modFileContent, err := os.ReadFile(goModPath)
-	if err != nil {
-		return "", err
-	}
-	// Parse the go.mod file
-	modFile, err := modfile.Parse(goModPath, modFileContent, nil)
-	if err != nil {
-		return "", err
-	}
+func GetPackagePath(goModPath string, modFile *modfile.File, filename string) (string, error) {
 	// Retrieve the module path
 	modulePath := modFile.Module.Mod.Path
-	pkgPath, _ := getRelativePath(goModPath, path.Dir(filename))
+	pkgPath, err := GetRelativePath(goModPath, path.Dir(filename))
+	if err != nil {
+		return "", err
+	}
 	return path.Join(modulePath, pkgPath), nil
 }
 
-// getRelativePath returns the shared path between two paths.
+// GetRelativePath returns the shared path between two paths.
 // if they are in the same folder, they will return the same folder path.
 // Example: /path1/folder1/file and /path1/folder2/file2 should return /path1.
-func getRelativePath(path1, path2 string) (string, error) {
+func GetRelativePath(path1, path2 string) (string, error) {
 	// Make the paths absolute to ensure accurate relative path calculation
 	absPath1, err := filepath.Abs(path1)
 	if err != nil {
@@ -120,41 +109,4 @@ func getRelativePath(path1, path2 string) (string, error) {
 		return "", err
 	}
 	return relativePath, nil
-}
-
-/*
-GroupByDirectory groups files by their directory
-Example:
-
-Input:
-
-	files := []string{
-		"/home/user/documents/file1.txt",
-		"/home/user/documents/file2.txt",
-		"/home/user/images/image1.png",
-		"/home/user/images/image2.png",
-		"/home/user/images/image3.png",
-	}
-
-Output:
-
-		{
-		"/home/user/documents": []string{
-			"/home/user/documents/file1.txt",
-			"/home/user/documents/file2.txt",
-		},
-		"/home/user/images": []string{
-			"/home/user/images/image1.png",
-			"/home/user/images/image2.png",
-			"/home/user/images/image3.png",
-		},
-	}
-*/
-func GroupByDirectory(files []string) map[string][]string {
-	groups := make(map[string][]string)
-	for _, file := range files {
-		dir := filepath.Dir(file)
-		groups[dir] = append(groups[dir], file)
-	}
-	return groups
 }

@@ -3,18 +3,21 @@ package fake
 import (
 	"go/parser"
 
+	"github.com/rs/zerolog/log"
 	"github.com/sonalys/fake/internal/files"
-	"github.com/sonalys/fake/internal/imports"
 )
 
 func (g *Generator) ParseFile(input string) (*ParsedFile, error) {
-	file, err := parser.ParseFile(g.FileSet, input, nil, parser.Mode(0))
+	file, err := parser.ParseFile(g.FileSet, input, nil, parser.SkipObjectResolution)
 	if err != nil {
 		return nil, err
 	}
-	packagePath, _ := files.GetPackagePath(input)
-
-	imports, importsPathMap := imports.FileListUsedImports(file)
+	packagePath, err := files.GetPackagePath(g.goModFilename, g.goMod, input)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get package info")
+		return nil, err
+	}
+	imports, importsPathMap := g.cachedPackageInfo(file)
 	return &ParsedFile{
 		Generator:      g,
 		Ref:            file,

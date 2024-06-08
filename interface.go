@@ -24,10 +24,16 @@ type ParsedInterface struct {
 	//	type B[J any] interface{ Method() J }
 	// it should have method Method() T when implementing A mock.
 	TranslateGenericNames []string
+
+	fieldsCache []*ParsedField
 }
 
 func (i *ParsedInterface) ListFields() []*ParsedField {
-	return i.ParsedFile.Generator.listInterfaceFields(i, i.ParsedFile.Imports)
+	if i.fieldsCache != nil {
+		return i.fieldsCache
+	}
+	i.fieldsCache = i.ParsedFile.Generator.listInterfaceFields(i, i.ParsedFile.Imports)
+	return i.fieldsCache
 }
 
 // ListInterfaceFields receives an interface to translate fields into fields.
@@ -36,6 +42,9 @@ func (i *ParsedInterface) ListFields() []*ParsedField {
 func (g *Generator) listInterfaceFields(i *ParsedInterface, imports map[string]*imports.ImportEntry) []*ParsedField {
 	if i == nil || i.Ref.Methods == nil {
 		return nil
+	}
+	if i.fieldsCache != nil {
+		return i.fieldsCache
 	}
 	var resp []*ParsedField
 	for _, field := range i.Ref.Methods.List {
@@ -90,6 +99,7 @@ func (g *Generator) listInterfaceFields(i *ParsedInterface, imports map[string]*
 		}
 	}
 	resp = deduplicatedResp
+	i.fieldsCache = resp
 	return resp
 }
 
@@ -124,7 +134,7 @@ func (g *Generator) parseInterface(ident *ast.SelectorExpr, f *ParsedFile) *Pars
 	if !ok {
 		return nil
 	}
-	pkg, ok := pkgs.Parse(pkgInfo.Path)
+	pkg, ok := pkgs.Parse(g.goModFilename, pkgInfo.Path)
 	if !ok {
 		return nil
 	}

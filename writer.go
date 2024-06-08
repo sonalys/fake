@@ -6,22 +6,34 @@ import (
 	"go/format"
 	"io"
 	"os"
+	"sync"
 
 	"github.com/rs/zerolog/log"
 	"github.com/sonalys/fake/internal/files"
 )
 
+var pool = sync.Pool{
+	New: func() any {
+		newBuf := make([]byte, 0, 1024*10)
+		return &newBuf
+	},
+}
+
 func (g *Generator) GenerateFile(input string, interfaceNames ...string) []byte {
 	parsedFile, err := g.ParseFile(input)
 	if err != nil {
-		log.Panic().Msgf("failed to parse file: %s", input)
+		log.Panic().Err(err).Msgf("failed to parse file: %s", input)
 	}
 	interfaces := parsedFile.ListInterfaces(interfaceNames...)
 	if len(interfaces) == 0 {
 		return nil
 	}
-	header := bytes.NewBuffer(make([]byte, 0, parsedFile.Size))
-	body := bytes.NewBuffer(make([]byte, 0, parsedFile.Size))
+	buf1 := pool.Get().(*[]byte)
+	buf2 := pool.Get().(*[]byte)
+	defer pool.Put(buf1)
+	defer pool.Put(buf2)
+	header := bytes.NewBuffer(*buf1)
+	body := bytes.NewBuffer(*buf2)
 	if g.MockPackageName == "" {
 		g.MockPackageName = parsedFile.PkgName
 	}
@@ -32,7 +44,7 @@ func (g *Generator) GenerateFile(input string, interfaceNames ...string) []byte 
 	}
 	// writeImports comes after interfaces because we only add external dependencies after generating interfaces.
 	parsedFile.writeImports(header)
-	header.Write(body.Bytes())
+	header.ReadFrom(body)
 	return formatCode(header.Bytes())
 }
 

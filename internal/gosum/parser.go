@@ -17,6 +17,7 @@ func readGoSum(path string, goMod map[string]string) (map[string]string, error) 
 	if err != nil {
 		return nil, err
 	}
+	defer file.Close()
 	dependencies := make(map[string]string)
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {

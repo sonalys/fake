@@ -17,13 +17,13 @@ func Test(t *testing.T) {
 	f, err := parser.ParseFile(fset, "../../testdata/stub.go", nil, 0)
 	require.NoError(t, err)
 
-	got, _ := FileListUsedImports(f)
+	got, _ := CachedImportInformation("")(f)
 
 	exp := []ImportEntry{
-		{PackageInfo: packages.PackageInfo{Name: "anotherpkg", Path: "github.com/sonalys/fake/testdata/anotherpkg"}},
-		{PackageInfo: packages.PackageInfo{Name: "time", Path: "time"}},
-		{PackageInfo: packages.PackageInfo{Name: "testing", Path: "testing"}},
-		{PackageInfo: packages.PackageInfo{Name: "require", Path: "github.com/stretchr/testify/require"}, Alias: "stub"},
+		{PackageInfo: &packages.PackageInfo{Name: "anotherpkg", Path: "github.com/sonalys/fake/testdata/anotherpkg"}},
+		{PackageInfo: &packages.PackageInfo{Name: "time", Path: "time"}},
+		{PackageInfo: &packages.PackageInfo{Name: "testing", Path: "testing"}},
+		{PackageInfo: &packages.PackageInfo{Name: "require", Path: "github.com/stretchr/testify/require"}, Alias: "stub"},
 	}
 	require.ElementsMatch(t, exp, got)
 }
