@@ -70,6 +70,12 @@ func GetUncachedFiles(inputs, ignore []string, outputDir string) (map[string]Loc
 				}
 				continue
 			}
+			stat, _ := os.Stat(filePath)
+			if !entry.ModifiedAt.IsZero() && !stat.ModTime().IsZero() && stat.ModTime().Equal(entry.ModifiedAt) {
+				entry.exists = true
+				out[filePath] = &entry
+				continue
+			}
 			importsHash, err := getImportsHash(filePath, dependencies)
 			if err != nil {
 				return nil, err
@@ -89,6 +95,7 @@ func GetUncachedFiles(inputs, ignore []string, outputDir string) (map[string]Loc
 				exists:       true,
 				Hash:         hash,
 				Dependencies: importsHash,
+				ModifiedAt:   stat.ModTime(),
 			}
 		}
 	}

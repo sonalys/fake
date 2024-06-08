@@ -42,7 +42,7 @@ func main() {
 		// Defaults to $CWD
 		input = []string{"."}
 	}
-	if interfaceName != nil {
+	if *interfaceName != "" {
 		if *output != "mocks" {
 			log.Error().Msgf("-output %s cannot be used when -interface is set", *output)
 			return

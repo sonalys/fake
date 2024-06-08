@@ -22,7 +22,7 @@ func GenerateInterface(c GenerateInterfaceConfig) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("error comparing file hashes")
 	}
-	log.Info().Msgf("scanning %d files", len(fileHashes))
+	log.Info().Msgf("scanning %d files for interface %s", len(fileHashes), c.InterfaceName)
 	gen := NewGenerator(c.PackageName)
 	for curFilePath := range fileHashes {
 		b := gen.GenerateFile(curFilePath, c.InterfaceName)
@@ -48,6 +48,7 @@ func Run(inputs []string, output string, ignore []string, interfaces ...string) 
 	if err != nil {
 		log.Fatal().Err(err).Msg("error comparing file hashes")
 	}
+	log.Info().Msgf("scanning %d files", len(fileHashes))
 	var counter int
 	for curFilePath, lockFile := range fileHashes {
 		if !lockFile.Changed() {
