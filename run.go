@@ -27,13 +27,13 @@ func GenerateInterface(c GenerateInterfaceConfig) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("error creating mock generator")
 	}
-	for curFilePath := range fileHashes {
-		b := gen.GenerateFile(curFilePath, c.InterfaceName)
+	for relPath, hash := range fileHashes {
+		b := gen.GenerateFile(hash.AbsolutePath(), c.InterfaceName)
 		if b == nil {
 			continue
 		}
-		log.Info().Msgf("generating mock for %s:%s", curFilePath, c.InterfaceName)
-		oldFilename := strings.TrimRight(path.Base(curFilePath), path.Ext(curFilePath))
+		log.Info().Msgf("generating mock for %s:%s", relPath, c.InterfaceName)
+		oldFilename := strings.TrimRight(path.Base(relPath), path.Ext(relPath))
 		filename := fmt.Sprintf("%s.%s.gen.go", oldFilename, c.InterfaceName)
 		outputFilename := path.Join(c.OutputFolder, filename)
 		outputFile, err := files.CreateFileAndFolders(outputFilename)
