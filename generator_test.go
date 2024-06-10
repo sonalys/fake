@@ -9,8 +9,8 @@ import (
 )
 
 func Test_Generate(t *testing.T) {
-	output := t.TempDir()
-	// output := "out"
+	// output := t.TempDir()
+	output := "out"
 	os.RemoveAll(output) // no caching
 	Run([]string{"testdata"}, output, nil)
 	g, err := NewGenerator("mocks", "testdata")

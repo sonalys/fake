@@ -200,9 +200,13 @@ func (i *ParsedInterface) writeGenericsNameHeader() string {
 	return fmt.Sprintf("[%s]", strings.Join(i.GenericsNames, ", "))
 }
 
+func (i *ParsedInterface) getMockName() string {
+	return fmt.Sprintf("%sMock", i.Name)
+}
+
 func (i *ParsedInterface) writeStruct(w io.Writer) {
 	// Write struct definition implementing the interface
-	fmt.Fprintf(w, "type %s%s struct {\n", i.Name, i.writeGenericsHeader())
+	fmt.Fprintf(w, "type %s%s struct {\n", i.getMockName(), i.writeGenericsHeader())
 	for _, field := range i.ListFields() {
 		fmt.Fprintf(w, "\tsetup%s mockSetup.Mock[", field.Name)
 		i.PrintMethodHeader(w, "func", field)
@@ -213,8 +217,8 @@ func (i *ParsedInterface) writeStruct(w io.Writer) {
 
 func (i *ParsedInterface) writeInitializer(w io.Writer) {
 	genericsNameHeader := i.writeGenericsNameHeader()
-	fmt.Fprintf(w, "func New%s%s(t *testing.T) *%s%s {\n", i.Name, i.writeGenericsHeader(), i.Name, genericsNameHeader)
-	fmt.Fprintf(w, "\treturn &%s%s{\n", i.Name, genericsNameHeader)
+	fmt.Fprintf(w, "func New%s%s(t *testing.T) *%s%s {\n", i.getMockName(), i.writeGenericsHeader(), i.getMockName(), genericsNameHeader)
+	fmt.Fprintf(w, "\treturn &%s%s{\n", i.getMockName(), genericsNameHeader)
 	for _, field := range i.ListFields() {
 		fmt.Fprintf(w, "\t\tsetup%s: mockSetup.NewMock[", field.Name)
 		i.PrintMethodHeader(w, "func", field)
@@ -226,7 +230,7 @@ func (i *ParsedInterface) writeInitializer(w io.Writer) {
 
 func (i *ParsedInterface) writeAssertExpectations(w io.Writer) {
 	genericsTypeHeader := i.writeGenericsNameHeader()
-	fmt.Fprintf(w, "func (s *%s%s) AssertExpectations(t *testing.T) bool {\n", i.Name, genericsTypeHeader)
+	fmt.Fprintf(w, "func (s *%s%s) AssertExpectations(t *testing.T) bool {\n", i.getMockName(), genericsTypeHeader)
 	fmt.Fprintf(w, "\treturn ")
 	for _, field := range i.ListFields() {
 		fmt.Fprintf(w, "s.setup%s.AssertExpectations(t) &&\n\t\t", field.Name)
@@ -236,7 +240,7 @@ func (i *ParsedInterface) writeAssertExpectations(w io.Writer) {
 }
 
 func (i *ParsedInterface) writeOnMethod(w io.Writer, methodName string, f *ParsedField) {
-	fmt.Fprintf(w, "func (s *%s%s) On%s(funcs ...", i.Name, i.writeGenericsNameHeader(), methodName)
+	fmt.Fprintf(w, "func (s *%s%s) On%s(funcs ...", i.getMockName(), i.writeGenericsNameHeader(), methodName)
 	i.PrintMethodHeader(w, "func", f)
 	fmt.Fprintf(w, ") mockSetup.Config {\n")
 	fmt.Fprintf(w, "\treturn s.setup%s.Append(funcs...)\n", methodName)
@@ -244,7 +248,7 @@ func (i *ParsedInterface) writeOnMethod(w io.Writer, methodName string, f *Parse
 }
 
 func (i *ParsedInterface) writeMethod(w io.Writer, methodName string, f *ParsedField) {
-	fmt.Fprintf(w, "func (s *%s%s) ", i.Name, i.writeGenericsNameHeader())
+	fmt.Fprintf(w, "func (s *%s%s) ", i.getMockName(), i.writeGenericsNameHeader())
 	i.PrintMethodHeader(w, methodName, f)
 	fmt.Fprintf(w, "{\n")
 	var callingNames []string
