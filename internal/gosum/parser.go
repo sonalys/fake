@@ -39,7 +39,7 @@ func readGoSum(path string, goMod map[string]string) (map[string]string, error) 
 func Parse(dir string) (map[string]string, error) {
 	goMod, err := gomod.Parse(dir)
 	if err != nil {
-		return nil, fmt.Errorf("could not read go.mod: %w", err)
+		return nil, fmt.Errorf("could not parse go.mod: %w", err)
 	}
 	goSumPath, err := files.FindFile(dir, "go.sum")
 	if err != nil {

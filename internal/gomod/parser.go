@@ -12,7 +12,7 @@ import (
 func Parse(dir string) (map[string]string, error) {
 	goModPath, err := files.FindFile(dir, "go.mod")
 	if err != nil {
-		return nil, fmt.Errorf("could not find go.sum: %w", err)
+		return nil, fmt.Errorf("could not find go.mod: %w", err)
 	}
 	f, err := os.Open(goModPath)
 	if err != nil {

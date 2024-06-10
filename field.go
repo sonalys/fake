@@ -14,36 +14,22 @@ type ParsedField struct {
 	Type      string
 }
 
-func getFieldName(i int, field *ast.Field) string {
-	if len(field.Names) == 0 {
-		return fmt.Sprintf("a%d", i)
-	}
-	names := make([]string, 0, len(field.Names))
-	for _, name := range field.Names {
-		names = append(names, name.Name)
-	}
-	return strings.Join(names, ", ")
+func getFieldName(i int) string {
+	return fmt.Sprintf("a%d", i)
 }
 
 func getFieldCallingName(i int, field *ast.Field) string {
-	if len(field.Names) == 0 {
-		return fmt.Sprintf("a%d", i)
-	}
 	switch field.Type.(type) {
 	case *ast.Ellipsis:
-		return fmt.Sprintf("%s...", getFieldName(i, field))
+		return fmt.Sprintf("%s...", getFieldName(i))
 	}
-	names := make([]string, 0, len(field.Names))
-	for _, name := range field.Names {
-		names = append(names, name.Name)
-	}
-	return strings.Join(names, ",")
+	return getFieldName(i)
 }
 
 func (f *ParsedInterface) PrintAstField(i int, field *ast.Field, printName bool) string {
 	typeName := f.printAstExpr(field.Type)
 	if printName {
-		return fmt.Sprintf("%s %s", getFieldName(i, field), typeName)
+		return fmt.Sprintf("%s %s", getFieldName(i), typeName)
 	}
 	return typeName
 }

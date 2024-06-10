@@ -47,7 +47,7 @@ func GetUncachedFiles(inputs, ignore []string, outputDir string) (map[string]Loc
 	}
 	dependencies, err := gosum.Parse(inputs[0])
 	if err != nil {
-		return nil, fmt.Errorf("parsing go.sum file: %w", err)
+		return nil, fmt.Errorf("parsing go.sum file on %s: %w", inputs[0], err)
 	}
 	goFiles, err := files.ListGoFiles(inputs, append(ignore, outputDir))
 	if err != nil {

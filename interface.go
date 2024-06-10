@@ -255,7 +255,7 @@ func (i *ParsedInterface) writeMethod(w io.Writer, methodName string, f *ParsedF
 	var argNames []string
 	var argFlag []string
 	for i := range funcType.Params.List {
-		argNames = append(argNames, getFieldName(i, funcType.Params.List[i]))
+		argNames = append(argNames, getFieldName(i))
 		nameLen := len(funcType.Params.List[i].Names)
 		if nameLen == 0 {
 			nameLen = 1
