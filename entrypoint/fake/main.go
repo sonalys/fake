@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -41,6 +42,12 @@ func main() {
 	if len(input) == 0 {
 		// Defaults to $CWD
 		input = []string{"."}
+	}
+	for i := range input {
+		absInput, err := filepath.Abs(input[i])
+		if err == nil {
+			input[i] = absInput
+		}
 	}
 	if *interfaceName != "" {
 		if *output != "mocks" {
