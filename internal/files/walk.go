@@ -61,17 +61,21 @@ func CreateFileAndFolders(filePath string) (*os.File, error) {
 
 // FindFile searches for the specified file in the given directory and its parent directories.
 func FindFile(childDir, fileName string) (string, error) {
+	abs, err := filepath.Abs(childDir)
+	if err != nil {
+		return "", fmt.Errorf("could not use path %s: %w", childDir, err)
+	}
 	for {
-		filePath := filepath.Join(childDir, fileName)
+		filePath := filepath.Join(abs, fileName)
 		if fileExists(filePath) {
 			return filePath, nil
 		}
 
-		parentDir := filepath.Dir(childDir)
-		if parentDir == childDir {
+		parentDir := filepath.Dir(abs)
+		if parentDir == abs {
 			break
 		}
-		childDir = parentDir
+		abs = parentDir
 	}
 
 	return "", fmt.Errorf("%s file not found", fileName)
